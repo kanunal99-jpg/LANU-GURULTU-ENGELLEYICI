@@ -14,6 +14,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      LANU_VERSION_CODE: ${{ github.run_number }}
     permissions:
       contents: write
     steps:
@@ -44,8 +46,6 @@ jobs:
       - name: Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Derle ve lint
-        env:
-          LANU_VERSION_CODE: ${{ github.run_number }}
         run: gradle assembleDebug assembleDebugAndroidTest lintDebug --no-daemon
       - name: KVM erişimi
         run: |
@@ -53,6 +53,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Android WebView smoke testi
+        timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
