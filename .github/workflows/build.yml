@@ -1,7 +1,7 @@
 name: APK derle ve doğrula
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,6 +33,9 @@ jobs:
       - name: Yerel PeerJS bütünlüğü
         run: echo 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5  app/src/main/assets/vendor/peerjs.min.js' | sha256sum -c -
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
       - name: Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Derle ve lint
