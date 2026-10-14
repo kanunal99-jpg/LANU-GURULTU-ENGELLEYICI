@@ -1,0 +1,26 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0f1419; color: #e8eaed; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; max-width: 560px; margin-inline: auto; }
+header { padding: 8px 2px 20px; }
+.logo { color: #67d6ab; letter-spacing: 5px; font-weight: 800; font-size: 15px; }
+h1 { font-size: 28px; margin: 12px 0 6px; }
+header p { margin: 0; color: #9eabb9; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+.card { background: #1a2129; border: 1px solid #273340; border-radius: 18px; padding: 18px; margin-bottom: 14px; }
+.number { background: linear-gradient(135deg, #19372f, #1a2129); }
+.label { display: block; font-size: 13px; color: #b0bcc9; margin-bottom: 8px; }
+.myid { font-size: 38px; letter-spacing: 6px; font-weight: 750; }
+input[type=text] { width: 100%; padding: 14px; font-size: 23px; letter-spacing: 4px; border-radius: 10px; border: 1px solid #48596c; background: #0f1419; color: #e8eaed; }
+button { width: 100%; min-height: 48px; padding: 14px; font: inherit; font-weight: 600; border: 0; border-radius: 12px; margin-top: 10px; color: white; background: #2a6df4; }
+button.red { background: #b93542; }
+button.green { background: #187a50; }
+button.secondary { background: #293544; font-size: 14px; }
+button:disabled { opacity: .45; }
+[hidden] { display: none !important; }
+.row { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-height: 48px; }
+.row span { font-size: 15px; }
+.hint { font-size: 13px; color: #b0bcc9; line-height: 1.55; margin-bottom: 0; }
+.footer { padding: 0 4px 20px; }
+#status { font-size: 15px; line-height: 1.5; min-height: 24px; }
+input[type=checkbox] { width: 24px; height: 24px; accent-color: #67d6ab; }
+:focus-visible { outline: 3px solid #67d6ab; outline-offset: 3px; }
