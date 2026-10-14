@@ -142,3 +142,12 @@ test('matching control hangup ends ringing and forged call ID is ignored', () =>
 test('initial offline state never constructs signaling client', () => {
   const h = harness({online: false}); assert.equal(h.peers.length, 0); assert.equal(h.get('callBtn').disabled, true); assert.match(h.get('status').textContent, /İnternet/);
 });
+test('cancelled constrained capture does not retry and reopen microphone', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.click('hangBtn');
+  h.reject('OverconstrainedError'); await h.flush(); assert.equal(h.requested(), 1); assert.equal(h.peers[0].calls.length, 0);
+});
+test('signaling disconnect uses reconnect on the existing peer', () => {
+  const h = harness(); h.open(); h.peers[0].disconnected = true; h.peers[0].emit('disconnected');
+  const reconnect = [...h.timers.values()].find(timer => timer.delay === 1000); assert.ok(reconnect); reconnect.fn();
+  assert.equal(h.peers[0].reconnected, true); h.open(); assert.equal(h.get('callBtn').disabled, false);
+});

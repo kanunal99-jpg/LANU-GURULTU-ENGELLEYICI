@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,6 +32,11 @@ jobs:
         run: node --test tests/*.test.cjs
       - name: Yerel PeerJS bütünlüğü
         run: echo 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5  app/src/main/assets/vendor/peerjs.min.js' | sha256sum -c -
+      - name: İki istemci WebRTC ses bağlantısı
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          export LANU_CHROME_EXECUTABLE="$(command -v google-chrome)"
+          npm run test:webrtc
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
@@ -72,6 +77,7 @@ jobs:
             dist/
             app/build/reports/
             app/build/outputs/androidTest-results/
+            test-results/
           if-no-files-found: warn
       - name: Releases'a APK ekle
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

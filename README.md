@@ -33,7 +33,9 @@ node --test tests/*.test.cjs
 
 Son komut çalışan bir Android cihaz/emülatör ister. `gradlew`, resmî Gradle dağıtımını SHA-256 doğrulayarak indirir; `curl`, `unzip` ve `sha256sum` gerekir. Windows'ta Gradle 8.11.1 ile aynı görevler çalıştırılabilir.
 
-GitHub Actions kaynak kodu checkout eder; JS testleri, bağımlılık bütünlüğü, APK ve test APK derlemesi, Android lint ve API 35 emülatörde gerçek WebView başlangıç testi geçince APK imzası/içeriği kontrol edilir. Ana dala başarılı yayında APK ile SHA-256 dosyası Releases'a eklenir. Branch/PR derlemeleri sadece Actions artifact üretir.
+GitHub Actions kaynak kodu checkout eder; JS testleri, bağımlılık bütünlüğü, APK ve test APK derlemesi, Android lint ve API 35 emülatörde gerçek WebView başlangıç testi geçince APK imzası/içeriği kontrol edilir. Ana dala başarılı yayında APK ile SHA-256 dosyası Releases'a eklenir. PR derlemeleri sadece Actions artifact üretir.
+
+İsteğe bağlı gerçek WebRTC smoke testi: `npm ci --ignore-scripts` ve `LANU_CHROME_EXECUTABLE=/usr/bin/google-chrome npm run test:webrtc`. Test iki ayrı Chrome oturumunda gerçek paketlenmiş PeerJS ve RTCPeerConnection kullanır; yerel test sinyalleşmesi, sahte mikrofon kaynağı ve iki yönlü RTP paketleri ile cevaplama/reddetme/kapatma/mute/yeniden arama kontrol edilir. Üretimdeki PeerJS Cloud erişimi, farklı ağlar ve gerçek Android ses kalitesi bu testin dışında kalır. Test için yerel CSP ve sunucu seçenekleri değiştirilir; APK'nın güvenlik politikası değişmez.
 
 PeerJS 1.5.4 APK içinde yerel olarak paketlenmiştir (MIT, `app/src/main/assets/vendor/PEERJS-LICENSE`). Kaynak paket npm bütünlük değeri doğrulanarak alınmıştır; çalışma anında CDN'den kod yüklenmez. İzinler yalnızca güvenilir yerel WebView kökenine ve ses yakalamaya verilir. Kamera izni yoktur; harici gezinme ve dosya erişimi kapalıdır.
 

@@ -27,9 +27,11 @@ Hedef repo başlangıçta boştu. Kullanıcının altı dosyası incelendi. Buil
 
 ## Faz 3 — kanıt
 
-`node --test tests/*.test.cjs`: ilk uygulamada 20/20 geçti. Bunlar fake medya/Peer nesneleriyle çağrı yaşam döngüsü regresyon testleridir; gerçek bağlantı/işitme kalite testleri değildir.
+`node --test tests/*.test.cjs`: 22/22 geçti. Bunlar fake medya/Peer nesneleriyle çağrı yaşam döngüsü regresyon testleridir; gerçek bağlantı/işitme kalite testleri değildir.
 
 GitHub Actions, Android kaynak/test APK derlemesini ve lint'i; API 35 emülatörde yerel asset, güvenli köken, mikrofon API'si, native bridge ve pause/resume smoke testini yürütür. Gerçek çalışmanın sonucu Actions kaydında esas alınır. APK üretilmeden veya Actions tamamlanmadan başarılı yayın varmış gibi yorumlanmamalıdır.
+
+İki istemci testi `tests/webrtc-smoke.cjs`: gerçek paketlenmiş PeerJS ve RTCPeerConnection; izole Chrome oturumları, yerel sinyalleşme, sentetik mikrofon. İki yönlü RTP paketleri, cevap öncesi mikrofonun kapalı kalması, mute, iki tarafta kapatma temizliği, cevap öncesi reddetme, tekrar arama ve native pause kontrol edilir. Fiziksel Android veya üretim sunucusu testi değildir.
 
 ## Faz 4 — yayın ve kalanlar
 
