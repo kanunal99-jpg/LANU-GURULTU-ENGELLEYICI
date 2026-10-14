@@ -107,18 +107,35 @@
   function attach(connection, token) {
     if (!connection) throw new Error('ConnectionUnavailable');
     call = connection;
+    let boundPc = null;
+    function watchConnection() {
+      if (call !== connection || token !== epoch) return;
+      const pc = connection.peerConnection;
+      if (!pc) return;
+      if (boundPc !== pc && pc.addEventListener) {
+        boundPc = pc;
+        pc.addEventListener('connectionstatechange', watchConnection);
+        pc.addEventListener('iceconnectionstatechange', watchConnection);
+      }
+      if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
+        endCall('Ağ ses bağlantısını engelledi. Wi-Fi / mobil veri arasında geçiş deneyin.');
+        return;
+      }
+      const connected = pc.connectionState === 'connected'
+        || (pc.connectionState === undefined && ['connected', 'completed'].includes(pc.iceConnectionState));
+      if (connected && $('remote').srcObject) {
+        clearTimeout(timeout); state = 'connected'; ui(); say('Görüşme sürüyor.'); playRemote();
+      }
+    }
     connection.on('stream', remote => {
       if (call !== connection || token !== epoch) return;
-      clearTimeout(timeout); state = 'connected'; $('remote').srcObject = remote;
-      ui(); say('Görüşme sürüyor.'); playRemote();
+      $('remote').srcObject = remote;
+      state = 'dialing'; ui(); say('Ses bağlantısı kuruluyor…');
+      watchConnection();
     });
     connection.on('close', () => { if (call === connection) endCall('Görüşme bitti.', false); });
     connection.on('error', () => { if (call === connection) endCall('Ses bağlantısı kurulamadı. Farklı bir ağda tekrar deneyin.', false); });
-    // ICE failures may not be forwarded promptly by PeerJS.
-    const pc = connection.peerConnection;
-    if (pc && pc.addEventListener) pc.addEventListener('connectionstatechange', () => {
-      if (call === connection && pc.connectionState === 'failed') endCall('Ağ ses bağlantısını engelledi. Wi-Fi / mobil veri arasında geçiş deneyin.');
-    });
+    watchConnection();
   }
   function mediaError(error, token) {
     if (token !== epoch) return;

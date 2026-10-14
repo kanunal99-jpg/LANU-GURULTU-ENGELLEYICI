@@ -27,7 +27,7 @@ Hedef repo başlangıçta boştu. Kullanıcının altı dosyası incelendi. Buil
 
 ## Faz 3 — kanıt
 
-`node --test tests/*.test.cjs`: 22/22 geçti. Bunlar fake medya/Peer nesneleriyle çağrı yaşam döngüsü regresyon testleridir; gerçek bağlantı/işitme kalite testleri değildir.
+`node --test tests/*.test.cjs`: 24/24 geçti. Bunlar fake medya/Peer nesneleriyle çağrı yaşam döngüsü regresyon testleridir; gerçek bağlantı/işitme kalite testleri değildir.
 
 GitHub Actions, Android kaynak/test APK derlemesini ve lint'i; API 35 emülatörde yerel asset, güvenli köken, mikrofon API'si, native bridge ve pause/resume smoke testini yürütür. Gerçek çalışmanın sonucu Actions kaydında esas alınır. APK üretilmeden veya Actions tamamlanmadan başarılı yayın varmış gibi yorumlanmamalıdır.
 

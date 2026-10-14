@@ -29,7 +29,7 @@ function harness(options = {}) {
     getUserMedia() { requested++; return new Promise((resolve, reject) => { resolveMedia = resolve; rejectMedia = reject; }); }
   };
   class Connection extends EventEmitter {
-    constructor(remote = 'lanu-sesli-654321') { super(); this.peer = remote; this.connectionId = 'call-1'; this.closed = 0; this.answered = 0; }
+    constructor(remote = 'lanu-sesli-654321') { super(); this.peer = remote; this.connectionId = 'call-1'; this.closed = 0; this.answered = 0; this.pcEvents = {}; this.peerConnection = {connectionState:'connected', addEventListener:(event,fn)=>{this.pcEvents[event]=fn;}}; }
     close() { this.closed++; if (this.closed > 5) throw Error('recursive close'); this.emit('close'); }
     answer() { this.answered++; }
   }
@@ -150,4 +150,16 @@ test('signaling disconnect uses reconnect on the existing peer', () => {
   const h = harness(); h.open(); h.peers[0].disconnected = true; h.peers[0].emit('disconnected');
   const reconnect = [...h.timers.values()].find(timer => timer.delay === 1000); assert.ok(reconnect); reconnect.fn();
   assert.equal(h.peers[0].reconnected, true); h.open(); assert.equal(h.get('callBtn').disabled, false);
+});
+test('remote stream alone does not report a connected call or clear timeout', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const call = h.peers[0].calls[0]; call.peerConnection.connectionState = 'connecting'; call.emit('stream',h.stream);
+  assert.match(h.get('status').textContent,/kuruluyor/); assert.equal(h.get('muteBtn').hidden,true);
+  call.peerConnection.connectionState = 'connected'; call.pcEvents.connectionstatechange();
+  assert.equal(h.get('status').textContent,'Görüşme sürüyor.'); assert.equal(h.get('muteBtn').hidden,false);
+});
+test('negotiating stream still times out and releases microphone', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const call = h.peers[0].calls[0]; call.peerConnection.connectionState = 'connecting'; call.emit('stream',h.stream); h.deadline();
+  assert.equal(h.track.stopped,1); assert.equal(h.get('remote').srcObject,null);
 });

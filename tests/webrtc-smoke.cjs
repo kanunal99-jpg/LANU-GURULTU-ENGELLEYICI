@@ -50,7 +50,7 @@ ws.on('connection', (socket, request) => {
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); port = server.address().port;
   const browser = await chromium.launch({executablePath: process.env.LANU_CHROME_EXECUTABLE || '/usr/bin/google-chrome', headless:true,
-    args:['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']});
+    args:['--no-sandbox', '--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']});
   try {
     const contexts = await Promise.all([browser.newContext({viewport:{width:390,height:844}}), browser.newContext({viewport:{width:390,height:844}})]);
     const [a,b] = await Promise.all(contexts.map(c=>c.newPage()));
@@ -64,11 +64,21 @@ ws.on('connection', (socket, request) => {
     assert.equal(await b.evaluate(()=>window.__qaTracks.length),0);
     await b.locator('#answerBtn').click();
     await Promise.all([a,b].map(p=>p.waitForFunction(()=>document.getElementById('status').textContent==='Görüşme sürüyor.',{},{timeout:20000})));
-    await Promise.all([a,b].map(p=>p.waitForFunction(async()=>{
-      const pc=[...window.__qaPeer._connections.values()].flat().find(x=>x.type==='media').peerConnection;
-      const stats=await pc.getStats();
-      return pc.connectionState === 'connected' && [...stats.values()].some(x=>x.type==='inbound-rtp' && x.packetsReceived > 0);
-    }, {}, {timeout:10000})));
+    // Explicitly await async getStats results; a pending Promise is never proof of packets.
+    await Promise.all([a,b].map(async page => {
+      const limit=Date.now()+20000;
+      while(Date.now()<limit) {
+        const evidence=await page.evaluate(async()=>{
+          const pc=[...window.__qaPeer._connections.values()].flat().find(x=>x.type==='media').peerConnection;
+          const stats=await pc.getStats();
+          return {state:pc.connectionState,ice:pc.iceConnectionState,packets:[...stats.values()].filter(x=>x.type==='inbound-rtp').reduce((n,x)=>n+Number(x.packetsReceived||0),0)};
+        });
+        if(evidence.state==='connected' && evidence.packets>0) return;
+        if(Date.now()+250>=limit) throw new Error('RTP did not flow: '+JSON.stringify(evidence));
+        await new Promise(resolve=>setTimeout(resolve,250));
+      }
+      throw new Error('RTP packet deadline');
+    }));
     const rtc = await Promise.all([a,b].map(p=>p.evaluate(async()=>{
       const pc=[...window.__qaPeer._connections.values()].flat().find(x=>x.type==='media').peerConnection;
       const stats=await pc.getStats();
