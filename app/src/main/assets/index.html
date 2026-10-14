@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>LANU Sesli</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="vendor/peerjs.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header><div class="logo">LANU</div><h1>Sesli görüşme</h1><p>Sesin öne çıksın.</p></header>
+  <main>
+    <section class="card number"><div class="label">Görüşme kodun</div><div id="myid" class="myid">······</div><p class="hint">Bu kodu yalnızca görüşmek istediğin kişiyle paylaş.</p></section>
+    <section class="card">
+      <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
+      <input type="text" id="partner" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
+      <button id="callBtn" disabled>Ara</button>
+      <button id="answerBtn" class="green" hidden>Gelen aramayı cevapla</button>
+      <button id="hangBtn" class="red" hidden>Kapat / reddet</button>
+      <button id="muteBtn" class="secondary" aria-pressed="false" hidden>Mikrofonu kapat</button>
+      <button id="playBtn" class="secondary" hidden>Karşı tarafın sesini aç</button>
+    </section>
+    <section class="card">
+      <h2>Ses ayarları</h2>
+      <label class="row" for="ns"><span>Gürültü azaltma</span><input type="checkbox" id="ns" checked></label>
+      <label class="row" for="ec"><span>Yankı önleme</span><input type="checkbox" id="ec" checked></label>
+      <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc" checked></label>
+      <label class="row" for="speaker"><span>Hoparlör</span><input type="checkbox" id="speaker"></label>
+      <button id="btBtn" class="secondary">Bluetooth kulaklığa izin ver</button>
+      <p id="filterStatus" class="hint">Filtreler mikrofonundan karşıya giden sese uygulanır. Sonuç cihazın WebView desteğine bağlıdır.</p>
+    </section>
+    <section class="card" aria-live="polite"><div id="status" role="status">Bağlanıyor…</div><button id="retryBtn" class="secondary" hidden>Yeniden bağlan</button></section>
+    <p class="hint footer">İki kişi de uygulamayı açmalı. İnternet gerekir; normal telefon numaraları aranmaz. Arka plana geçmek görüşmeyi kapatır. Ses kaydı tutulmaz.</p>
+  </main>
+  <audio id="remote" autoplay playsinline></audio>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+*.apk
+*.zip
+node_modules/
+test-results/
