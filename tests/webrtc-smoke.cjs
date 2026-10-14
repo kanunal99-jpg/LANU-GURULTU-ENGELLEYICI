@@ -67,14 +67,15 @@ ws.on('connection', (socket, request) => {
     await Promise.all([a,b].map(p=>p.waitForFunction(async()=>{
       const pc=[...window.__qaPeer._connections.values()].flat().find(x=>x.type==='media').peerConnection;
       const stats=await pc.getStats();
-      return [...stats.values()].some(x=>x.type==='inbound-rtp' && x.packetsReceived > 0);
+      return pc.connectionState === 'connected' && [...stats.values()].some(x=>x.type==='inbound-rtp' && x.packetsReceived > 0);
     }, {}, {timeout:10000})));
     const rtc = await Promise.all([a,b].map(p=>p.evaluate(async()=>{
       const pc=[...window.__qaPeer._connections.values()].flat().find(x=>x.type==='media').peerConnection;
       const stats=await pc.getStats();
-      return {state:pc.connectionState, packetsReceived:[...stats.values()].filter(x=>x.type==='inbound-rtp').reduce((n,x)=>n+x.packetsReceived,0), remoteTracks:document.getElementById('remote').srcObject.getAudioTracks().length, filter:document.getElementById('filterStatus').textContent};
+      return {state:pc.connectionState, packetsReceived:[...stats.values()].filter(x=>x.type==='inbound-rtp').reduce((n,x)=>n+Number(x.packetsReceived || 0),0), remoteTracks:document.getElementById('remote').srcObject.getAudioTracks().length, filter:document.getElementById('filterStatus').textContent};
     })));
-    assert.ok(rtc.every(x=>x.state==='connected'&&x.remoteTracks===1&&x.packetsReceived>0));
+    console.log('WebRTC evidence:', JSON.stringify(rtc));
+    assert.ok(rtc.every(x=>x.state==='connected'&&x.remoteTracks===1&&x.packetsReceived>0), JSON.stringify(rtc));
     await a.locator('#muteBtn').click(); assert.equal(await a.evaluate(()=>window.__qaTracks.at(-1).enabled),false);
     await a.locator('#muteBtn').click();
     await a.locator('#hangBtn').click();
