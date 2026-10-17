@@ -139,6 +139,14 @@
     }
     connection.on('stream', remote => {
       if (call !== connection || token !== epoch) return;
+      // A transport-connected PeerJS stream with no audio tracks is NOT an
+      // audible conversation; fail closed rather than showing "connected".
+      const audioTracks = remote && typeof remote.getAudioTracks === 'function'
+        ? remote.getAudioTracks() : [];
+      if (!audioTracks || audioTracks.length === 0 || audioTracks.every(track => track.readyState === 'ended')) {
+        endCall('Karşı taraftan ses akışı alınamadı. Görüşmeyi yeniden deneyin.', false);
+        return;
+      }
       $('remote').srcObject = remote;
       // A received stream can disappear without a PeerJS close callback.
       // Never report an active call after its remote audio has ended.
@@ -147,11 +155,9 @@
           endCall('Karşı tarafın ses bağlantısı kesildi.', false);
         }
       };
-      if (remote.getAudioTracks) {
-        remote.getAudioTracks().forEach(track => {
-          if (track.addEventListener) track.addEventListener('ended', remoteEnded);
-        });
-      }
+      audioTracks.forEach(track => {
+        if (track.addEventListener) track.addEventListener('ended', remoteEnded);
+      });
       if (remote.addEventListener) remote.addEventListener('inactive', remoteEnded);
       state = 'dialing'; ui(); say('Ses bağlantısı kuruluyor…');
       watchConnection();

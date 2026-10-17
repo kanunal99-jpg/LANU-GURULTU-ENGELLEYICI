@@ -282,3 +282,35 @@ test('pagehide cancels startup deadline even when signaling is pending', () => {
   assert.equal(h.get('status').textContent, status);
   assert.equal(h.peers[0].destroyed, true);
 });
+
+test('an empty remote media stream cannot be reported as an active audio call', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321';
+  h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', { getAudioTracks: () => [] });
+  assert.equal(active.closed, 1);
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('remote').srcObject, null);
+  assert.match(h.get('status').textContent, /ses akışı alınamadı/);
+  assert.equal(h.get('muteBtn').hidden, true);
+});
+
+test('already ended remote audio track is rejected', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321';
+  h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', { getAudioTracks: () => [{ readyState: 'ended', addEventListener() {} }] });
+  assert.equal(active.closed, 1);
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('callBtn').hidden, false);
+});
+
+test('a live remote audio track still connects normally', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321';
+  h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', { getAudioTracks: () => [{ readyState: 'live', addEventListener() {} }] });
+  assert.equal(active.closed, 0);
+  assert.equal(h.track.stopped, 0);
+  assert.match(h.get('status').textContent, /Görüşme sürüyor/);
+});
