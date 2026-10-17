@@ -242,3 +242,43 @@ test('stale remote audio event cannot terminate a newer call', async () => {
   assert.equal(old.closed, closedBefore);
   assert.equal(h.get('status').textContent, 'Arama kapatıldı.');
 });
+
+test('backgrounding cancels initial signaling timeout and stale callback is inert', () => {
+  const h = harness();
+  const peer = h.peers[0];
+  const pending = [...h.timers.values()].find(t => t.delay === 15000);
+  assert.ok(pending, 'initial signaling timeout should exist');
+  h.context.lanuPause('Arka plan');
+  assert.equal([...h.timers.values()].includes(pending), false);
+  const status = h.get('status').textContent;
+  pending.fn();
+  assert.equal(peer.destroyed, false);
+  assert.equal(h.get('status').textContent, status);
+  assert.equal(h.get('callBtn').disabled, true);
+});
+
+test('offline transition cancels initial signaling timeout', () => {
+  const h = harness();
+  const peer = h.peers[0];
+  const pending = [...h.timers.values()].find(t => t.delay === 15000);
+  assert.ok(pending);
+  h.context.navigator.onLine = false;
+  h.events.offline();
+  assert.equal([...h.timers.values()].includes(pending), false);
+  const status = h.get('status').textContent;
+  pending.fn();
+  assert.equal(peer.destroyed, false);
+  assert.equal(h.get('status').textContent, status);
+});
+
+test('pagehide cancels startup deadline even when signaling is pending', () => {
+  const h = harness();
+  const pending = [...h.timers.values()].find(t => t.delay === 15000);
+  assert.ok(pending);
+  h.events.pagehide();
+  assert.equal([...h.timers.values()].includes(pending), false);
+  const status = h.get('status').textContent;
+  pending.fn();
+  assert.equal(h.get('status').textContent, status);
+  assert.equal(h.peers[0].destroyed, true);
+});
