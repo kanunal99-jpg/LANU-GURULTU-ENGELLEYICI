@@ -210,7 +210,8 @@
   function watchConnection(current) {
     clearTimeout(connectTimeout);
     connectTimeout = setTimeout(() => {
-      if (peer !== current || ready) return;
+      // A delayed signaling timeout is stale once app is hidden or offline.
+      if (peer !== current || ready || paused || navigator.onLine === false) return;
       say('Görüşme sunucusuna ulaşılamadı. Bağlantını kontrol edip yeniden dene.');
       if (!current.destroyed) current.destroy();
       reconnectSoon(); ui();
@@ -313,12 +314,24 @@
   window.lanuPause = message => {
     paused = true;
     clearTimeout(retry); retry = null;
+    clearTimeout(connectTimeout); connectTimeout = null;
     endCall(message || 'Görüşme kapatıldı.');
   };
   window.lanuResume = () => { paused = false; ui(); if (!ready) { attempts = 0; start(myId || newId()); } };
-  window.addEventListener('offline', () => { ready = false; clearTimeout(retry); retry = null; endCall('İnternet bağlantısı kesildi.'); });
+  window.addEventListener('offline', () => {
+    ready = false;
+    clearTimeout(retry); retry = null;
+    clearTimeout(connectTimeout); connectTimeout = null;
+    endCall('İnternet bağlantısı kesildi.');
+  });
   window.addEventListener('online', () => { attempts = 0; if (state === 'idle') start(myId || newId()); });
-  window.addEventListener('pagehide', () => { paused = true; endCall('Görüşme kapatıldı.'); if (peer) peer.destroy(); });
+  window.addEventListener('pagehide', () => {
+    paused = true;
+    clearTimeout(retry); retry = null;
+    clearTimeout(connectTimeout); connectTimeout = null;
+    endCall('Görüşme kapatıldı.');
+    if (peer) peer.destroy();
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden) window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.'); else window.lanuResume(); });
   const storedId = safeGet('lanuId');
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
