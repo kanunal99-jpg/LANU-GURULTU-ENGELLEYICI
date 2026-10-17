@@ -13,7 +13,7 @@ function harness(options = {}) {
     addEventListener(event, fn) { this.events[event] = fn; }
     setAttribute(key, value) { this[key] = value; }
     pause() {}
-    play() { if (options.playThrows) throw new Error('WebViewNotAllowed'); return options.playFails ? Promise.reject(new Error('Autoplay')) : Promise.resolve(); }
+    play() { this.playCount = (this.playCount || 0) + 1; if (options.playThrows) throw new Error('WebViewNotAllowed'); return options.playFails ? Promise.reject(new Error('Autoplay')) : Promise.resolve(); }
   }
   const document = {
     hidden: false,
@@ -201,6 +201,28 @@ test('signaling disconnect uses reconnect on the existing peer', () => {
   const reconnect = [...h.timers.values()].find(timer => timer.delay === 1000); assert.ok(reconnect); reconnect.fn();
   assert.equal(h.peers[0].reconnected, true); h.open(); assert.equal(h.get('callBtn').disabled, false);
 });
+test('repeated connected and ICE events do not replay the same remote audio', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321';
+  h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0]; active.emit('stream', h.stream);
+  assert.equal(h.get('remote').playCount, 1);
+  active.pcEvents.connectionstatechange();
+  active.pcEvents.iceconnectionstatechange();
+  assert.equal(h.get('remote').playCount, 1);
+  assert.equal(h.get('status').textContent, 'Görüşme sürüyor.');
+});
+
+test('a replacement remote stream triggers playback once for the new stream', async () => {
+  const h = harness(); h.open(); h.get('partner').value = '654321';
+  h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0]; active.emit('stream', h.stream);
+  const replacement = { getAudioTracks: () => [{ readyState: 'live', addEventListener() {} }] };
+  active.emit('stream', replacement);
+  assert.equal(h.get('remote').playCount, 2);
+  active.pcEvents.connectionstatechange();
+  assert.equal(h.get('remote').playCount, 2);
+});
+
 test('remote stream alone does not report a connected call or clear timeout', async () => {
   const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
   const call = h.peers[0].calls[0]; call.peerConnection.connectionState = 'connecting'; call.emit('stream',h.stream);
