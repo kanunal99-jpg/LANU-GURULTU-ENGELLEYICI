@@ -163,3 +163,62 @@ test('negotiating stream still times out and releases microphone', async () => {
   const call = h.peers[0].calls[0]; call.peerConnection.connectionState = 'connecting'; call.emit('stream',h.stream); h.deadline();
   assert.equal(h.track.stopped,1); assert.equal(h.get('remote').srcObject,null);
 });
+
+test('queued signaling retry never resumes while the app is backgrounded', () => {
+  const h = harness(); h.open();
+  const peer = h.peers[0]; peer.disconnected = true; peer.emit('disconnected');
+  const pending = [...h.timers.values()].find(t => t.delay === 1000);
+  assert.ok(pending, 'a reconnect must have been scheduled');
+  h.context.lanuPause('Arka plan');
+  assert.equal([...h.timers.values()].some(t => t === pending), false);
+  // Even if a callback was already on the event queue, it must remain inert.
+  pending.fn();
+  assert.equal(peer.reconnected, undefined);
+  assert.equal(h.peers.length, 1);
+  assert.equal(h.get('callBtn').disabled, true);
+});
+
+test('queued signaling retry never resumes after network goes offline', () => {
+  const h = harness(); h.open();
+  const peer = h.peers[0]; peer.disconnected = true; peer.emit('disconnected');
+  const pending = [...h.timers.values()].find(t => t.delay === 1000);
+  assert.ok(pending);
+  h.context.navigator.onLine = false;
+  pending.fn();
+  assert.equal(peer.reconnected, undefined);
+  assert.equal(h.peers.length, 1);
+});
+
+test('remote audio track ending closes the call and releases local microphone', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn');
+  h.resolve(); await h.flush();
+  const connection = h.peers[0].calls[0];
+  const listeners = {};
+  const remote = { getAudioTracks: () => [{
+    addEventListener(event, cb) { listeners[event] = cb; }
+  }] };
+  connection.emit('stream', remote);
+  assert.match(h.get('status').textContent, /Görüşme sürüyor/);
+  listeners.ended();
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('remote').srcObject, null);
+  assert.match(h.get('status').textContent, /Karşı tarafın ses bağlantısı kesildi/);
+  assert.equal(h.get('callBtn').hidden, false);
+});
+
+test('stale remote audio event cannot terminate a newer call', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn');
+  h.resolve(); await h.flush();
+  const old = h.peers[0].calls[0], listeners = {};
+  const remote = { getAudioTracks: () => [{
+    addEventListener(event, cb) { listeners[event] = cb; }
+  }] };
+  old.emit('stream', remote);
+  h.click('hangBtn');
+  const closedBefore = old.closed;
+  listeners.ended();
+  assert.equal(old.closed, closedBefore);
+  assert.equal(h.get('status').textContent, 'Arama kapatıldı.');
+});
