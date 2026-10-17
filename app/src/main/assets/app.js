@@ -133,7 +133,10 @@
       }
       const connected = pc.connectionState === 'connected'
         || (pc.connectionState === undefined && ['connected', 'completed'].includes(pc.iceConnectionState));
-      if (connected && $('remote').srcObject) {
+      if (connected && $('remote').srcObject && state !== 'connected') {
+        // PeerConnection may emit several connected/ICE events for the same
+        // stream; only the state transition should initiate audio playback.
+        // Repeated play() requests can race with WebView autoplay prompts.
         clearTimeout(timeout); state = 'connected'; ui(); say('Görüşme sürüyor.'); playRemote();
       }
     }
