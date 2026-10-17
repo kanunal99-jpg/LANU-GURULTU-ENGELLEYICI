@@ -109,6 +109,36 @@ test('backgrounding stops capture and blocks further dialing until resumed', asy
   const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush(); h.context.lanuPause('Arka plan');
   assert.equal(h.track.stopped, 1); assert.equal(h.get('callBtn').disabled, true); h.context.lanuResume(); assert.equal(h.get('callBtn').disabled, false);
 });
+test('resume rebuilds a PeerJS socket that silently died in the background', () => {
+  const h = harness(); h.open();
+  const old = h.peers[0];
+  h.context.lanuPause('Arka plan');
+  old.disconnected = true; // The WebView did not receive an event.
+  h.context.lanuResume();
+  assert.equal(h.peers.length, 2);
+  assert.equal(old.destroyed, true);
+  assert.equal(h.get('callBtn').disabled, true);
+  h.open();
+  assert.equal(h.get('callBtn').disabled, false);
+});
+
+test('resume retains a healthy signaling connection without reconnecting', () => {
+  const h = harness(); h.open();
+  h.context.lanuPause('Arka plan');
+  h.context.lanuResume();
+  assert.equal(h.peers.length, 1);
+  assert.equal(h.get('callBtn').disabled, false);
+});
+
+test('resume detects a destroyed PeerJS socket with stale ready flag', () => {
+  const h = harness(); h.open();
+  h.context.lanuPause('Arka plan');
+  h.peers[0].destroyed = true;
+  h.context.lanuResume();
+  assert.equal(h.peers.length, 2);
+  assert.equal(h.get('callBtn').disabled, true);
+});
+
 test('old peer errors do not overwrite new peer readiness', () => {
   const h = harness(); const old = h.peers[0]; old.emit('error', {type: 'unavailable-id'}); h.open(); old.emit('error', {type: 'network'});
   assert.equal(h.get('callBtn').disabled, false);
