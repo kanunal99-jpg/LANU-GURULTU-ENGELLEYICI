@@ -97,12 +97,22 @@
   }
   function playRemote() {
     const token = epoch;
-    const playing = $('remote').play();
-    if (playing && playing.catch) playing.catch(() => {
+    const offerManualPlayback = () => {
+      // Late media playback failures from an already ended call must not
+      // resurrect a play button or override the newer call's status.
       if (token === epoch && state === 'connected') {
-        $('playBtn').hidden = false; say('Görüşme bağlı. Sesi açmak için aşağıdaki düğmeye bas.');
+        $('playBtn').hidden = false;
+        say('Görüşme bağlı. Sesi açmak için aşağıdaki düğmeye bas.');
       }
-    });
+    };
+    try {
+      const playing = $('remote').play();
+      if (playing && playing.catch) playing.catch(offerManualPlayback);
+    } catch (_) {
+      // Some Android WebView implementations throw synchronously instead
+      // of returning a rejected Promise for media playback restrictions.
+      offerManualPlayback();
+    }
   }
   function attach(connection, token) {
     if (!connection) throw new Error('ConnectionUnavailable');
