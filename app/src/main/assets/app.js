@@ -323,7 +323,17 @@
     clearTimeout(connectTimeout); connectTimeout = null;
     endCall(message || 'Görüşme kapatıldı.');
   };
-  window.lanuResume = () => { paused = false; ui(); if (!ready) { attempts = 0; start(myId || newId()); } };
+  window.lanuResume = () => {
+    paused = false;
+    // WebView can suspend a PeerJS socket while the page is hidden without
+    // delivering the disconnected event. Never let stale ready=true enable
+    // outgoing calls after resume.
+    if (!peer || peer.destroyed || peer.disconnected || peer.open === false) {
+      ready = false;
+    }
+    ui();
+    if (!ready) { attempts = 0; start(myId || newId()); }
+  };
   window.addEventListener('offline', () => {
     ready = false;
     clearTimeout(retry); retry = null;
