@@ -130,6 +130,19 @@
     connection.on('stream', remote => {
       if (call !== connection || token !== epoch) return;
       $('remote').srcObject = remote;
+      // A received stream can disappear without a PeerJS close callback.
+      // Never report an active call after its remote audio has ended.
+      const remoteEnded = () => {
+        if (call === connection && token === epoch && $('remote').srcObject === remote) {
+          endCall('Karşı tarafın ses bağlantısı kesildi.', false);
+        }
+      };
+      if (remote.getAudioTracks) {
+        remote.getAudioTracks().forEach(track => {
+          if (track.addEventListener) track.addEventListener('ended', remoteEnded);
+        });
+      }
+      if (remote.addEventListener) remote.addEventListener('inactive', remoteEnded);
       state = 'dialing'; ui(); say('Ses bağlantısı kuruluyor…');
       watchConnection();
     });
@@ -175,7 +188,10 @@
   function reconnectSoon() {
     if (retry || paused || navigator.onLine === false || attempts >= 4) { ui(); return; }
     retry = setTimeout(() => {
-      retry = null; attempts++;
+      retry = null;
+      // The app may have gone to the background or offline since scheduling.
+      if (paused || navigator.onLine === false) { ui(); return; }
+      attempts++;
       if (peer && !peer.destroyed && peer.disconnected) {
         try { peer.reconnect(); watchConnection(peer); } catch (_) { start(myId); }
       } else start(myId);
@@ -284,7 +300,11 @@
     if (state !== 'idle') endCall('Yeniden bağlanılıyor.');
     paused = false; attempts = 0; collisions = 0; start(myId || newId());
   });
-  window.lanuPause = message => { paused = true; endCall(message || 'Görüşme kapatıldı.'); };
+  window.lanuPause = message => {
+    paused = true;
+    clearTimeout(retry); retry = null;
+    endCall(message || 'Görüşme kapatıldı.');
+  };
   window.lanuResume = () => { paused = false; ui(); if (!ready) { attempts = 0; start(myId || newId()); } };
   window.addEventListener('offline', () => { ready = false; clearTimeout(retry); retry = null; endCall('İnternet bağlantısı kesildi.'); });
   window.addEventListener('online', () => { attempts = 0; if (state === 'idle') start(myId || newId()); });
