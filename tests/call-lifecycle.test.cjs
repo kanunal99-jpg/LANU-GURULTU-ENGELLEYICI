@@ -13,7 +13,7 @@ function harness(options = {}) {
     addEventListener(event, fn) { this.events[event] = fn; }
     setAttribute(key, value) { this[key] = value; }
     pause() {}
-    play() { return options.playFails ? Promise.reject(new Error('Autoplay')) : Promise.resolve(); }
+    play() { if (options.playThrows) throw new Error('WebViewNotAllowed'); return options.playFails ? Promise.reject(new Error('Autoplay')) : Promise.resolve(); }
   }
   const document = {
     hidden: false,
@@ -128,6 +128,26 @@ test('autoplay failure offers a playback button', async () => {
   const h = harness({playFails: true}); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush(); h.peers[0].calls[0].emit('stream', h.stream); await h.flush();
   assert.equal(h.get('playBtn').hidden, false);
 });
+test('synchronous Android WebView playback failure offers manual play without losing the call', async () => {
+  const h = harness({playThrows: true}); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  assert.doesNotThrow(() => active.emit('stream', h.stream));
+  assert.equal(h.get('playBtn').hidden, false);
+  assert.match(h.get('status').textContent, /Görüşme bağlı/);
+  assert.equal(active.closed, 0);
+});
+
+test('a playback failure cannot revive a call already hung up', async () => {
+  const h = harness({playFails: true}); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0]; active.emit('stream', h.stream);
+  h.click('hangBtn');
+  await h.flush();
+  assert.equal(h.get('playBtn').hidden, true);
+  assert.equal(h.get('status').textContent, 'Arama kapatıldı.');
+});
+
 test('unknown callers and concurrent incoming calls are closed', () => {
   const h = harness(); h.open(); const invalid = new h.Connection('bad'); h.peers[0].emit('call', invalid); assert.equal(invalid.closed, 1);
   const first = new h.Connection(); h.peers[0].emit('call', first); const second = new h.Connection(); h.peers[0].emit('call', second); assert.equal(second.closed, 1); assert.equal(first.closed, 0);
