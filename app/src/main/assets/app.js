@@ -4,7 +4,7 @@
   const PREFIX = 'lanu-sesli-';
   const DEADLINE = 45000;
   let peer = null, call = null, stream = null, state = 'idle', ready = false;
-  let epoch = 0, timeout = null, retry = null, connectTimeout = null, attempts = 0;
+  let epoch = 0, timeout = null, retry = null, connectTimeout = null, transportTimeout = null, attempts = 0;
   let muted = false, paused = false, myId = '', collisions = 0;
 
   function say(message) { $('status').textContent = message; }
@@ -92,6 +92,7 @@
   }
   function endCall(message, notify = true) {
     epoch++; clearTimeout(timeout); timeout = null;
+    clearTimeout(transportTimeout); transportTimeout = null;
     const oldCall = call, oldStream = stream;
     // Clear references BEFORE close(): PeerJS can synchronously emit close.
     call = null; stream = null; state = 'idle'; muted = false;
@@ -132,6 +133,7 @@
     if (!connection) throw new Error('ConnectionUnavailable');
     call = connection;
     let boundPc = null;
+    let transportWasConnected = false;
     function watchConnection() {
       if (call !== connection || token !== epoch) return;
       const pc = connection.peerConnection;
@@ -151,12 +153,33 @@
         endCall('Ağ ses bağlantısını engelledi. Wi-Fi / mobil veri arasında geçiş deneyin.');
         return;
       }
+      const transportInterrupted = pc.connectionState === 'disconnected'
+        || pc.iceConnectionState === 'disconnected';
+      if (transportInterrupted && transportWasConnected) {
+        if (!transportTimeout) {
+          transportTimeout = setTimeout(() => {
+            transportTimeout = null;
+            // A previously canceled timeout must never terminate a resumed call.
+            if (call === connection && token === epoch &&
+                (pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected')) {
+              endCall('Ses bağlantısı geri gelmedi. Görüşme kapatıldı; yeniden deneyin.', false);
+            }
+          }, 12000);
+        }
+        if (state === 'connected') {
+          state = 'dialing'; ui();
+          say('Ses bağlantısı geçici olarak kesildi. Yeniden bağlanıyor…');
+        }
+        return;
+      }
       const connected = pc.connectionState === 'connected'
         || (pc.connectionState === undefined && ['connected', 'completed'].includes(pc.iceConnectionState));
+      if (connected && transportTimeout) { clearTimeout(transportTimeout); transportTimeout = null; }
       if (connected && $('remote').srcObject && state !== 'connected') {
         // PeerConnection may emit several connected/ICE events for the same
         // stream; only the state transition should initiate audio playback.
         // Repeated play() requests can race with WebView autoplay prompts.
+        transportWasConnected = true;
         clearTimeout(timeout); state = 'connected'; ui(); say('Görüşme sürüyor.'); playRemote();
       }
     }
