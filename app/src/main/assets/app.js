@@ -127,6 +127,12 @@
         pc.addEventListener('connectionstatechange', watchConnection);
         pc.addEventListener('iceconnectionstatechange', watchConnection);
       }
+      if (pc.connectionState === 'closed' || pc.iceConnectionState === 'closed') {
+        // A WebRTC transport can close without PeerJS emitting call.close.
+        // Release the microphone rather than leaving a false connected UI.
+        endCall('Ses bağlantısı kapandı. Yeniden aramayı deneyin.', false);
+        return;
+      }
       if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
         endCall('Ağ ses bağlantısını engelledi. Wi-Fi / mobil veri arasında geçiş deneyin.');
         return;
