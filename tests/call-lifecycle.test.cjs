@@ -12,7 +12,7 @@ function harness(options = {}) {
     constructor(id) { this.id = id; this.checked = true; this.hidden = false; this.value = ''; this.textContent = ''; this.events = {}; }
     addEventListener(event, fn) { this.events[event] = fn; }
     setAttribute(key, value) { this[key] = value; }
-    pause() {}
+    pause() { if (options.pauseThrows) throw new Error('WebViewMediaDisposed'); }
     play() { this.playCount = (this.playCount || 0) + 1; if (options.playThrows) throw new Error('WebViewNotAllowed'); return options.playFails ? Promise.reject(new Error('Autoplay')) : Promise.resolve(); }
   }
   const document = {
@@ -79,6 +79,38 @@ test('closing an active call is nonrecursive and restores microphone/audio', asy
   const call = h.peers[0].calls[0]; call.emit('stream', h.stream); h.click('hangBtn');
   assert.equal(call.closed, 1); assert.equal(h.track.stopped, 1); assert.equal(h.native.at(-1), false); assert.equal(h.get('callBtn').hidden, false);
 });
+test('call cleanup restores the UI if WebView media pause throws', async () => {
+  const h = harness({pauseThrows: true});
+  h.open();
+  h.get('partner').value = '654321';
+  h.click('callBtn');
+  h.resolve();
+  await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', h.stream);
+  assert.doesNotThrow(() => h.click('hangBtn'));
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('remote').srcObject, null);
+  assert.equal(h.get('callBtn').hidden, false);
+  assert.equal(h.get('playBtn').hidden, true);
+  assert.equal(h.native.at(-1), false);
+  assert.equal(active.closed, 1);
+});
+
+test('offline cleanup remains safe when WebView media has been disposed', async () => {
+  const h = harness({pauseThrows: true});
+  h.open();
+  h.get('partner').value = '654321';
+  h.click('callBtn');
+  h.resolve();
+  await h.flush();
+  h.context.navigator.onLine = false;
+  assert.doesNotThrow(() => h.events.offline());
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('callBtn').disabled, true);
+  assert.equal(h.native.at(-1), false);
+});
+
 test('remote closes incoming call while microphone prompt is pending', async () => {
   const h = harness(); h.open(); const incoming = new h.Connection(); h.peers[0].emit('call', incoming); h.click('answerBtn'); incoming.emit('close'); h.resolve(); await h.flush();
   assert.equal(incoming.answered, 0); assert.equal(h.track.stopped, 1);
