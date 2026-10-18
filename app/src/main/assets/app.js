@@ -88,7 +88,11 @@
     if (notify && oldCall) control(oldCall, 'hangup');
     if (oldCall) { try { oldCall.close(); } catch (_) { log('Call close failed'); } }
     if (oldStream) oldStream.getTracks().forEach(track => track.stop());
-    $('remote').pause(); $('remote').srcObject = null; $('playBtn').hidden = true;
+    // A WebView media element can throw during teardown after its backing
+    // playback component is disposed. Always finish releasing the call UI.
+    try { $('remote').pause(); } catch (_) { log('Remote media pause failed during cleanup'); }
+    try { $('remote').srcObject = null; } catch (_) { log('Remote media detach failed during cleanup'); }
+    $('playBtn').hidden = true;
     native('setCallActive', false); ui(); say(message || 'Hazır.');
   }
   function deadline(token, message) {
