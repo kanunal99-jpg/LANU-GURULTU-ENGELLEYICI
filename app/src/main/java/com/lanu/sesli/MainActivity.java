@@ -58,8 +58,10 @@ public class MainActivity extends Activity {
     private final Runnable repeatRing = new Runnable() {
         @Override public void run() {
             if (!ringing || destroyed || !visible) return;
-            if (ringtone != null && !ringtone.isPlaying()) ringtone.play();
-            main.postDelayed(this, 3000);
+            try {
+                if (ringtone != null && !ringtone.isPlaying()) ringtone.play();
+                main.postDelayed(this, 3000);
+            } catch (RuntimeException e) { ring(false); Log.w(TAG,"Ringtone playback stopped"); }
         }
     };
     private final Runnable repeatRingback = new Runnable() {

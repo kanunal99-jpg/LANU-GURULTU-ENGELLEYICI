@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   let vault, opened = false, mode = 'unlock', gateEpoch = 0, hold, idle;
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
-  let incomingPair = null, writing = false;
+  let incomingPair = null, writes = Promise.resolve(), lastCallState = 'idle';
   const message = text => { $('cameraStatus').textContent = text; };
   const calls = () => window.LanuCalls;
   const storage = () => window.localStorage;
@@ -78,6 +78,8 @@
     try {
       const until=Number(storage().getItem('lens-delay')||0);
       if(until>Date.now()) throw Error('Wait');
+      await writes;
+      if(token!==gateEpoch)return;
       const data=mode==='unlock'?await vault.unlock(pin):await vault.create(pin);
       if(token!==gateEpoch){vault.lock();return;}
       storage().removeItem('lens-failures');storage().removeItem('lens-delay');
@@ -100,15 +102,19 @@
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();message('Fotoğraf çekmek için kamerayı aç.');
   }
-  async function persist(update) {
-    if(!opened||!vault||!vault.data||writing)return false;
-    writing=true;const current=vault.data, token=gateEpoch, candidate=JSON.parse(JSON.stringify(current));update(candidate);
-    try{await vault.write(candidate);if(opened&&token===gateEpoch){vault.data=candidate;renderContacts();}return true;}
-    catch(_){if(opened)$('pairStatus').textContent='Değişiklik kaydedilemedi. Depolamayı kontrol et.';return false;}
-    finally{writing=false;}
+  function persist(update) {
+    const scheduledEpoch=gateEpoch;
+    const operation=async()=>{
+      if(!opened||!vault||!vault.data||scheduledEpoch!==gateEpoch)return false;
+      const token=gateEpoch,candidate=JSON.parse(JSON.stringify(vault.data));update(candidate);
+      try{await vault.write(candidate);if(opened&&token===gateEpoch){vault.data=candidate;renderContacts();}return true;}
+      catch(_){if(opened)$('pairStatus').textContent='Değişiklik kaydedilemedi. Depolamayı kontrol et.';return false;}
+    };
+    writes=writes.then(operation,operation);return writes;
   }
   function renderContacts() {
-    $('contactList').replaceChildren(); if(!opened||!vault.data||!vault.data.contactsEnabled)return;
+    $('contactList').replaceChildren(); if(!opened||!vault.data)return;
+    $('contactsEnabled').checked=!!vault.data.contactsEnabled; if(!vault.data.contactsEnabled)return;
     for(const contact of vault.data.contacts){
       if(!/^[1-9]\d{5}$/.test(contact.code))continue;
       const row=document.createElement('div');row.className='contact';
@@ -124,7 +130,7 @@
     await persist(data=>{const found=data.contacts.find(c=>c.code===code);if(found)found.name=name;else if(data.contacts.length<200)data.contacts.push({code,name});});
   }
   window.LanuLens={isOpen:()=>opened,lock,stopCamera,
-    callState(state){if(state!=='idle')stopCamera();touch();},
+    callState(state){if(state!=='idle')stopCamera();if(opened&&state==='ringing'&&lastCallState!=='ringing')$('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});lastCallState=state;touch();},
     pairStatus(text){if(opened)$('pairStatus').textContent=text;},
     paired,
     pairRequest(code,respond){
