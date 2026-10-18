@@ -62,6 +62,16 @@
       result.getTracks().forEach(track => track.stop());
       return null;
     }
+    const audioTracks = typeof result.getAudioTracks === 'function'
+      ? result.getAudioTracks() : [];
+    if (!audioTracks.length || audioTracks.every(track => track.readyState === 'ended')) {
+      // Some buggy devices return a MediaStream but no usable microphone.
+      // Do not dial a silent call or leave any captured tracks running.
+      result.getTracks().forEach(track => track.stop());
+      const noMic = new Error('Microphone stream has no live audio tracks');
+      noMic.name = 'NotFoundError';
+      throw noMic;
+    }
     stream = result; muted = false;
     $('muteBtn').textContent = 'Mikrofonu kapat'; $('muteBtn').setAttribute('aria-pressed', 'false');
     result.getTracks().forEach(track => track.addEventListener('ended', () => {

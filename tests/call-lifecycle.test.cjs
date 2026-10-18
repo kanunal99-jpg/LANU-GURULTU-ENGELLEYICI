@@ -54,7 +54,7 @@ function harness(options = {}) {
   const flush = () => new Promise(resolve => setImmediate(resolve));
   const open = () => { peers.at(-1).emit('open'); };
   return {get, peers, track, stream, events, timers, context, native, open, flush, requested: () => requested,
-    resolve: () => resolveMedia(stream), reject: name => rejectMedia({name}),
+    resolve: (providedStream = stream) => resolveMedia(providedStream), reject: name => rejectMedia({name}),
     Connection, click: id => get(id).events.click(),
     deadline: () => { for (const [id, timer] of timers) if (timer.delay === 45000) { timers.delete(id); timer.fn(); } }
   };
@@ -123,6 +123,37 @@ test('permission denied restores idle with useful message', async () => {
   const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.reject('NotAllowedError'); await h.flush();
   assert.match(h.get('status').textContent, /Mikrofon izni/); assert.equal(h.get('callBtn').hidden, false);
 });
+test('empty microphone stream fails before calling remote peer', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn');
+  const emptyAudio = {getTracks: () => [], getAudioTracks: () => []};
+  h.resolve(emptyAudio); await h.flush();
+  assert.equal(h.peers[0].calls.length, 0);
+  assert.match(h.get('status').textContent, /Mikrofon bulunamadı/);
+  assert.equal(h.get('callBtn').hidden, false);
+  assert.equal(h.native.at(-1), false);
+});
+
+test('all ended microphone tracks are released and cannot start silent call', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn');
+  h.track.readyState = 'ended';
+  h.resolve(); await h.flush();
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.peers[0].calls.length, 0);
+  assert.match(h.get('status').textContent, /Mikrofon bulunamadı/);
+  assert.equal(h.native.at(-1), false);
+});
+
+test('a stream with at least one live microphone track can dial', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn');
+  h.track.readyState = 'live';
+  h.resolve(); await h.flush();
+  assert.equal(h.peers[0].calls.length, 1);
+  assert.equal(h.track.stopped, 0);
+});
+
 test('unsupported filters fall back to plain audio', async () => {
   const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.reject('OverconstrainedError'); await h.flush();
   assert.equal(h.requested(), 2); h.resolve(); await h.flush(); assert.equal(h.peers[0].calls.length, 1);
