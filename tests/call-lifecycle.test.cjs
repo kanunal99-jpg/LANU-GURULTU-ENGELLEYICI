@@ -264,6 +264,54 @@ test('signaling disconnect uses reconnect on the existing peer', () => {
   const reconnect = [...h.timers.values()].find(timer => timer.delay === 1000); assert.ok(reconnect); reconnect.fn();
   assert.equal(h.peers[0].reconnected, true); h.open(); assert.equal(h.get('callBtn').disabled, false);
 });
+test('transient ICE disconnection retries and restores remote playback before timeout', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', h.stream);
+  assert.equal(h.get('remote').playCount, 1);
+  active.peerConnection.iceConnectionState = 'disconnected';
+  active.pcEvents.iceconnectionstatechange();
+  assert.match(h.get('status').textContent, /Yeniden bağlanıyor/);
+  assert.equal(h.get('muteBtn').hidden, true);
+  const pending = [...h.timers.values()].find(t => t.delay === 12000);
+  assert.ok(pending, 'a bounded reconnect grace period should be armed');
+  active.peerConnection.iceConnectionState = 'connected';
+  active.pcEvents.iceconnectionstatechange();
+  assert.equal(h.get('status').textContent, 'Görüşme sürüyor.');
+  assert.equal(h.get('muteBtn').hidden, false);
+  assert.equal(h.get('remote').playCount, 2);
+  assert.equal([...h.timers.values()].includes(pending), false);
+  // Already queued callbacks must not close a recovered connection.
+  pending.fn();
+  assert.equal(h.track.stopped, 0);
+});
+
+test('unrecovered transport interruption closes call and releases microphone', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0]; active.emit('stream', h.stream);
+  active.peerConnection.connectionState = 'disconnected';
+  active.pcEvents.connectionstatechange();
+  const pending = [...h.timers.values()].find(t => t.delay === 12000);
+  assert.ok(pending);
+  pending.fn();
+  assert.equal(h.track.stopped, 1);
+  assert.equal(active.closed, 1);
+  assert.match(h.get('status').textContent, /Ses bağlantısı geri gelmedi/);
+  assert.equal(h.get('callBtn').hidden, false);
+});
+
+test('initial negotiation keeps original deadline instead of ICE recovery timer', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.peerConnection.connectionState = 'disconnected';
+  active.emit('stream', h.stream);
+  assert.equal([...h.timers.values()].some(t => t.delay === 12000), false);
+  assert.equal([...h.timers.values()].some(t => t.delay === 45000), true);
+});
+
 test('repeated connected and ICE events do not replay the same remote audio', async () => {
   const h = harness(); h.open(); h.get('partner').value = '654321';
   h.click('callBtn'); h.resolve(); await h.flush();
