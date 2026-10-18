@@ -366,3 +366,29 @@ test('a live remote audio track still connects normally', async () => {
   assert.equal(h.track.stopped, 0);
   assert.match(h.get('status').textContent, /Görüşme sürüyor/);
 });
+
+test('terminal closed PeerConnection releases microphone without PeerJS close event', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const active = h.peers[0].calls[0];
+  active.emit('stream', h.stream);
+  active.peerConnection.connectionState = 'closed';
+  active.pcEvents.connectionstatechange();
+  assert.equal(active.closed, 1);
+  assert.equal(h.track.stopped, 1);
+  assert.equal(h.get('remote').srcObject, null);
+  assert.match(h.get('status').textContent, /Ses bağlantısı kapandı/);
+});
+
+test('terminal ICE closed state closes the active call, stale callback does not', async () => {
+  const h = harness(); h.open();
+  h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush();
+  const first = h.peers[0].calls[0];
+  first.emit('stream', h.stream);
+  first.peerConnection.iceConnectionState = 'closed';
+  first.pcEvents.iceconnectionstatechange();
+  assert.equal(h.track.stopped, 1);
+  assert.equal(first.closed, 1);
+  first.pcEvents.iceconnectionstatechange(); // closed call callback arrives late
+  assert.equal(first.closed, 1);
+});
