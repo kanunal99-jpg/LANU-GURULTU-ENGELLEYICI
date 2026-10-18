@@ -64,3 +64,7 @@ Tek kulak kullanımını, WebRTC akışını, mikrofon izinlerini ve Android pla
 - **Ücret onayı:** Ücretli API/kota/servis tüketimi kullanıcı onayı olmadan genişletilmez; gerçek alternatif ve fallback test edilir.
 - **Kanıtlı kapanış:** Bulgu ID, önem, dosya+satır, CI kanıtı, kök neden, düzeltme commit'i, kabul testi, sürüm, geri dönüş planı ile izlenir.
 - **Faz durumu:** Bu ekleme yalnız analiz/dokümantasyon; kaynak kod düzeltmesi veya üretim doğrulaması değildir.
+
+## 2026-10-18 — Lanu Lens
+
+İlk kamera ekranında özel görüşme/rehber/kod alanına ait hiçbir metin veya giriş ipucu gösterilmez. Kamera gerçek ve kullanılabilir olmalıdır. Özel alana kullanıcı seçimiyle uzun basma ve kişisel PIN ile girilir. Rehber isteğe bağlı ve cihazda şifrelidir; telefon rehberi okunmaz. Gelen arama zilinin başlayıp tüm bitiş yollarında durması doğrulanır. Arka plan/kapalı uygulamaya arama desteği, push altyapısı olmadığı sürece varmış gibi sunulmaz. Kamera, mikrofon ve sinyalleşme kilitte bırakılır; özel veriler loglanmaz. APK her başarılı ana dal sürümünde Releases'a yüklenir.

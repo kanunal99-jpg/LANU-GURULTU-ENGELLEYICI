@@ -1,42 +1,39 @@
-# LANU Sesli — Android
+# Lanu Lens — Android
 
-İki uygulama arasında internet üzerinden sesli görüşme. Mikrofonun sesine WebRTC gürültü azaltma, yankı önleme ve otomatik ses dengeleme uygulanır. Android 8.0 ve üzeri.
+Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-## APK indir ve kullan
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases/latest). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.0.apk**; SHA256SUMS.txt aynı sürümdedir.
 
-1. [Releases](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases) sayfasındaki son test sürümünden **LANU-Sesli-1.1.0.apk** dosyasını indir. Repo özel olduğu için GitHub hesabınla giriş yapmalısın.
-2. Her iki telefona kur. Android'in gerekirse tarayıcı için istediği APK yükleme iznini ver.
-3. İki taraf da uygulamayı açsın; 6 haneli görüşme kodunu paylaşın. Biri diğerinin kodunu yazıp **Ara**, diğeri **Cevapla** düğmesine bassın.
-4. Mikrofon iznini görüşme sırasında ver. Bluetooth kulaklık için uygulamadaki izin düğmesini kullan. Hoparlör ve mikrofon kapatma seçenekleri var.
+## Kullanım
 
-## Açık sınırlar
+İlk ekran yalnızca kamera özelliklerini gösterir. Özel alanın adı, rehber, görüşme kodu, giriş ipucu veya arama düğmesi bu ekranda gösterilmez. Objektif logosuna üç saniye basılı tutunca PIN ekranı açılır. İlk kullanımda kişisel 6–12 haneli PIN oluşturulur. Hazır/sabit PIN yoktur. Sonraki girişler aynı PIN ile yapılır. Parmak izi bu sürümde eklenmemiştir.
 
-- **Normal telefon araması, WhatsApp görüşmesi veya sistem genelinde gürültü engelleme yapmaz.** Her iki taraf LANU'yu kullanmalıdır.
-- Filtreler yalnızca yerel mikrofonun giden sesini işler. Karşı tarafın gürültüsünü onun uygulaması azaltır; tüm gürültüyü yok etme garantisi yoktur. Aktif filtre durumu cihazın bildirdiği ayarlarla gösterilir.
-- Ücretsiz PeerJS Cloud ile sinyalleşir; servis garantisi yoktur. Ağ kesintisinde sınırlı otomatik yeniden bağlantı ve elle yeniden deneme vardır. İki Google STUN adresi ile Cloudflare STUN alternatifi kullanılır.
-- **TURN aktarma sunucusu yoktur.** Bazı mobil/kurumsal ağlarda, simetrik NAT altında ses bağlantısı kurulamayabilir. Zaman aşımı ve farklı ağa geçiş önerisi gösterilir; tüm ağlar için kesintisiz çalıştığı iddia edilmez. Ücretli servis açılmamıştır.
-- Uygulama arka plana alındığında görüşme ve mikrofon güvenli şekilde kapatılır. Arka plan görüşmesi, kapalı uygulamaya bildirim, gelen arama zil sesi ve çağrı geçmişi bu sürümde yoktur.
-- 6 haneli kod kimlik doğrulaması değildir. Yalnızca güvendiğin kişiyle paylaş. Gelen görüşme sen cevaplamadan mikrofonu açmaz.
-- Görüşme kaydı tutulmaz. Ses WebRTC ile aktarılır; PeerJS sunucusu bağlantı kimlikleri ve ağ bilgilerini görür. Yerelde kod ve filtre tercihleri saklanır.
-- Bu dağıtım **debug imzalı test APK'sıdır**, Play Store üretim sürümü değildir. Kalıcı özel imzalama anahtarı henüz kurulmamıştır; farklı derlemelerde imza değişirse eski APK'yı kaldırıp kurmak gerekir.
-- Gerçek iki Android telefon, Bluetooth cihazları ve gürültülü ortamda işitme/kalite testi kullanıcı cihazlarında ayrıca yapılmalıdır. Emülatör smoke testi bunların yerine geçmez.
+Özel alanda iki kullanıcı görüşme kodlarını paylaşır. Kod eşleştirme isteğini karşı taraf açıkça onaylar. Uygulama içi rehber varsayılan olarak kapalıdır; her kullanıcı kendisi açabilir. Açıkken onaylanan eşleşmeler takma adla saklanır; kaydedilmiş kişinin Ara düğmesi kodu yeniden yazmadan arar. Kapalıyken kodla tek görüşme yapılabilir. Rehberi kapatmak mevcut şifreli kayıtları silmez; kişi satırındaki Sil düğmesi siler. Telefon rehberine erişim izni istenmez.
 
-## Derleme ve doğrulama
+Gelen görüşme, özel alan açıkken sistem zil sesi ve titreşimle haber verir. Sessiz/titreşim modu korunur. Cevapla, reddet, karşı tarafın kapatması, ağ kaybı ve 45 saniye zaman aşımında zil durur. Arayan taraf, alıcıya ulaşıldığında çalma tonu duyar. Mikrofon yalnızca arayan aramayı başlatınca ve alıcı Cevapla seçince açılır. Gelen çağrı kameraya veya ilk ekrana kişi/kod taşımaz.
 
-Java 17, Android SDK 35, Android Gradle Plugin 8.9.2, Gradle 8.11.1.
+Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve arka plana geçiş özel alanı kilitler. Görüşme biter, mikrofon/kamera ve sinyalleşme bırakılır. Android ekran görüntüsü/son uygulamalar önizlemesi FLAG_SECURE ile korunur. Kullanıcı fotoğrafları yalnızca Kaydet seçildiğinde sistem dosya seçicisiyle dışarı aktarılır.
+
+## Gizlilik ve teknik sınırlar
+
+- PIN'den PBKDF2-SHA256 (310.000 tur) ile anahtar türetilir; rehber AES-256-GCM ile rastgele salt/IV kullanılarak cihazda şifrelenir. Anahtar kilitlemede bellekten bırakılır. PIN kurtarma servisi yoktur; PIN unutulursa uygulama verilerini temizlemek tüm kayıtları siler. PIN'e beş başarısız denemeden sonra bir dakika bekleme uygulanır. Bu cihaz içi sınır, cihazın sahibi tarafından depolamanın değiştirilmesine karşı sunucu koruması değildir.
+- Altı haneli görüşme kodu kimlik doğrulaması değildir. Kod eşleştirme karşılıklı kullanıcı onayı sağlar; kişi kimliğini kriptografik olarak doğrulamaz. Sonraki her çağrı alıcının cevaplamasını gerektirir. Kodu yalnızca güvendiğin kişiyle paylaş.
+- **İki uygulamada özel alan açık olmalıdır.** Kapalı/kilitli uygulamaya veya arka plana gelen arama bu sürümde desteklenmez. FCM/push, kalıcı arka plan çağrı servisi ve operatör araması yoktur. Normal çağrıya benzer zil, mevcut uygulama içi görüşme içindir.
+- Mikrofon/kamera kullanımının Android göstergeleri sistemde görünür. Kamera yalnızca kamerayı açma eyleminde izin ister; açılışta mikrofon izni veya görüşme sunucusu bağlantısı kurulmaz.
+- PeerJS Cloud ile sinyalleşme, Google/Cloudflare STUN alternatifleri kullanılır. TURN aktarma sunucusu yoktur; simetrik NAT/kurumsal ağlarda bağlantı kurulamayabilir. Ağ kesintisinde sınırlı yeniden deneme, açık hata ve zaman aşımı uygulanır. Ücretli servis açılmamıştır.
+- Ses kaydı tutulmaz. Gürültü/yankı azaltma ve otomatik seviye dengelemesi cihazın WebRTC desteğine bağlıdır. Kod ve filtre tercihleri yerelde, rehber şifreli saklanır. Loglar kişi adlarını, kodları ve sesi içermez.
+- İç paket kimliği `com.lanu.sesli` güncelleme uyumu için korunur. Ekrandaki ad ve simge Lanu Lens'tir. Dağıtım debug imzalı test APK'sıdır. Farklı CI derlemeleri farklı debug anahtarı kullanabilir; imza uyuşmazsa eski kurulum kaldırılır ve yerel veriler kaybolur.
+
+## Geliştirme ve test
+
+Java 17, SDK 35, AGP 8.9.2, Gradle 8.11.1; PeerJS 1.5.4 yerel ve MIT lisanslıdır. İnternetten çalıştırılabilir script yüklenmez. WebView yalnızca güvenilir HTTPS yerel varlık kökeninden kamera/mikrofon ister.
 
 ```sh
-node --test tests/*.test.cjs
-./gradlew assembleDebug assembleDebugAndroidTest lintDebug
-./gradlew connectedDebugAndroidTest
+npm ci --ignore-scripts
+npm test
+LANU_CHROME_EXECUTABLE=/usr/bin/google-chrome npm run test:webrtc
+sh gradlew assembleDebug assembleDebugAndroidTest lintDebug
+sh gradlew connectedDebugAndroidTest
 ```
 
-Son komut çalışan bir Android cihaz/emülatör ister. `gradlew`, resmî Gradle dağıtımını SHA-256 doğrulayarak indirir; `curl`, `unzip` ve `sha256sum` gerekir. Windows'ta Gradle 8.11.1 ile aynı görevler çalıştırılabilir.
-
-GitHub Actions kaynak kodu checkout eder; JS testleri, bağımlılık bütünlüğü, APK ve test APK derlemesi, Android lint ve API 35 emülatörde gerçek WebView başlangıç testi geçince APK imzası/içeriği kontrol edilir. Ana dala başarılı yayında APK ile SHA-256 dosyası Releases'a eklenir. PR derlemeleri sadece Actions artifact üretir.
-
-İsteğe bağlı gerçek WebRTC smoke testi: `npm ci --ignore-scripts` ve `LANU_CHROME_EXECUTABLE=/usr/bin/google-chrome npm run test:webrtc`. Test iki ayrı Chrome oturumunda gerçek paketlenmiş PeerJS ve RTCPeerConnection kullanır; yerel test sinyalleşmesi, sahte mikrofon kaynağı ve iki yönlü RTP paketleri ile cevaplama/reddetme/kapatma/mute/yeniden arama kontrol edilir. Üretimdeki PeerJS Cloud erişimi, farklı ağlar ve gerçek Android ses kalitesi bu testin dışında kalır. Test için yerel CSP ve sunucu seçenekleri değiştirilir; APK'nın güvenlik politikası değişmez.
-
-PeerJS 1.5.4 APK içinde yerel olarak paketlenmiştir (MIT, `app/src/main/assets/vendor/PEERJS-LICENSE`). Kaynak paket npm bütünlük değeri doğrulanarak alınmıştır; çalışma anında CDN'den kod yüklenmez. İzinler yalnızca güvenilir yerel WebView kökenine ve ses yakalamaya verilir. Kamera izni yoktur; harici gezinme ve dosya erişimi kapalıdır.
-
-Geliştirme kuralları: [AGENTS.md](AGENTS.md). Bulgu ve test sınırları: [docs/INCELEME.md](docs/INCELEME.md).
+GitHub Actions testleri, yerel PeerJS bütünlüğünü, iki Chrome oturumunda gerçek WebRTC/RTP akışını, kamera/PIN/rehber/görünürlük akışını, Android derlemesini, lint ve API 35 WebView smoke testini doğrular. Ana dalda tüm adımlar başarılı olursa imzası doğrulanmış APK, SHA-256 ve APK bilgileri otomatik Releases'a eklenir. Gerçek iki Android telefonda işitilen zil, farklı ağlarda ses kalitesi, Bluetooth ve fiziksel kamera/flâş ayrıca cihaz testi gerektirir; emülatör bunları kanıtlamaz.

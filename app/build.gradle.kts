@@ -8,7 +8,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "1.1.0"
+        versionName = "2.0.0"
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
     compileOptions {

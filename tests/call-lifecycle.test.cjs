@@ -6,7 +6,7 @@ const EventEmitter = require('node:events');
 const source = fs.readFileSync('app/src/main/assets/app.js', 'utf8');
 
 function harness(options = {}) {
-  const elements = {}, events = {}, timers = new Map(), peers = [], native = [];
+  const elements = {}, events = {}, timers = new Map(), peers = [], native = [], ringing = [], ringback = [];
   let timerId = 0, requested = 0, resolveMedia, rejectMedia;
   class Element {
     constructor(id) { this.id = id; this.checked = true; this.hidden = false; this.value = ''; this.textContent = ''; this.events = {}; }
@@ -47,13 +47,14 @@ function harness(options = {}) {
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timers.delete(id); },
     addEventListener(event, fn) { events[event] = fn; },
-    LanuAudio: {setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
+    LanuAudio: {setRinging:value=>ringing.push(value),setRingback:value=>ringback.push(value),setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
+  if(options.lens) context.LanuLens={isOpen:()=>options.lensOpen!==false,callState(){},pairStatus(){},clearPair(){}};
   context.window = context;
   vm.runInNewContext(source, context);
   const get = id => document.getElementById(id);
   const flush = () => new Promise(resolve => setImmediate(resolve));
   const open = () => { peers.at(-1).emit('open'); };
-  return {get, peers, track, stream, events, timers, context, native, open, flush, requested: () => requested,
+  return {get, peers, track, stream, events, timers, context, native, ringing, ringback, open, flush, requested: () => requested,
     resolve: (providedStream = stream) => resolveMedia(providedStream), reject: name => rejectMedia({name}),
     Connection, click: id => get(id).events.click(),
     deadline: () => { for (const [id, timer] of timers) if (timer.delay === 45000) { timers.delete(id); timer.fn(); } }
@@ -502,4 +503,23 @@ test('terminal ICE closed state closes the active call, stale callback does not'
   assert.equal(first.closed, 1);
   first.pcEvents.iceconnectionstatechange(); // closed call callback arrives late
   assert.equal(first.closed, 1);
+});
+
+test('Lens camera mode never starts signaling and resume cannot bypass PIN',()=>{
+ const h=harness({lens:true,lensOpen:false});assert.equal(h.peers.length,0);h.context.lanuResume();assert.equal(h.peers.length,0);assert.equal(h.get('callBtn').disabled,true);
+ h.get('partner').value='654321';h.click('callBtn');assert.equal(h.requested(),0);
+});
+test('incoming ring starts without microphone and stops on rejection, timeout, offline and background',()=>{
+ for(const end of ['reject','timeout','offline','background']){
+  const h=harness();h.open();h.peers[0].emit('call',new h.Connection());assert.equal(h.ringing.at(-1),true);assert.equal(h.requested(),0);
+  if(end==='reject')h.click('hangBtn');else if(end==='timeout')h.deadline();else if(end==='offline')h.events.offline();else h.context.lanuPause();
+  assert.equal(h.ringing.at(-1),false);assert.equal(h.get('answerBtn').hidden,true);
+ }
+});
+test('answering stops ringtone before microphone permission resolves',()=>{
+ const h=harness();h.open();h.peers[0].emit('call',new h.Connection());h.click('answerBtn');assert.equal(h.ringing.at(-1),false);assert.equal(h.requested(),1);
+});
+test('locking Lens destroys signaling and releases active audio',async()=>{
+ const h=harness({lens:true,lensOpen:true});h.open();h.get('partner').value='654321';h.click('callBtn');h.resolve();await h.flush();
+ h.context.LanuCalls.deactivate();assert.equal(h.track.stopped,1);assert.equal(h.peers[0].destroyed,true);assert.equal(h.ringing.at(-1),false);assert.equal(h.ringback.at(-1),false);
 });

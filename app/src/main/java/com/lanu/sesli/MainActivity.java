@@ -3,8 +3,17 @@ package com.lanu.sesli;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.media.ToneGenerator;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
+import android.util.Base64;
+import java.io.OutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.graphics.Color;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
@@ -31,15 +40,35 @@ import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
 import java.util.Collections;
 
-/** Only bundled, trusted assets may run script or use the microphone bridge. */
+/** Only bundled local assets may access capture, ringtone and photo export. */
 public class MainActivity extends Activity {
     private static final String TAG = "LANU";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/index.html";
-    private static final int MICROPHONE = 10, BLUETOOTH = 11;
+    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13;
     private WebView web;
     private AudioManager audio;
-    private PermissionRequest pendingMicrophone;
+    private PermissionRequest pendingMicrophone, pendingCamera;
+    private Ringtone ringtone;
+    private Vibrator vibrator;
+    private ToneGenerator ringback;
+    private boolean ringing, ringingBack;
+    private byte[] photoBytes;
+    private final ExecutorService files = Executors.newSingleThreadExecutor();
+    private final Runnable repeatRing = new Runnable() {
+        @Override public void run() {
+            if (!ringing || destroyed || !visible) return;
+            if (ringtone != null && !ringtone.isPlaying()) ringtone.play();
+            main.postDelayed(this, 3000);
+        }
+    };
+    private final Runnable repeatRingback = new Runnable() {
+        @Override public void run() {
+            if (!ringingBack || destroyed || !visible) return;
+            if (ringback != null) ringback.startTone(ToneGenerator.TONE_SUP_RINGTONE, 1500);
+            main.postDelayed(this, 4000);
+        }
+    };
     private boolean active, speaker, destroyed, visible;
     private int previousMode;
     private boolean previousSpeaker;
@@ -68,6 +97,7 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         if (audio != null) audio.registerAudioDeviceCallback(devices, main);
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
@@ -106,43 +136,64 @@ public class MainActivity extends Activity {
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(PermissionRequest request) {
-                main.post(() -> requestMicrophone(request));
+                main.post(() -> requestCapture(request));
             }
             @Override public void onPermissionRequestCanceled(PermissionRequest request) {
                 if (pendingMicrophone == request) pendingMicrophone = null;
+                if (pendingCamera == request) pendingCamera = null;
             }
         });
         web.loadUrl(HOME);
     }
 
-    private void requestMicrophone(PermissionRequest request) {
+    private void requestCapture(PermissionRequest request) {
         if (destroyed || !visible || !localOrigin(request.getOrigin())) { request.deny(); return; }
-        boolean asksAudio = false;
-        for (String resource : request.getResources()) {
-            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) asksAudio = true;
-        }
-        if (!asksAudio) { request.deny(); return; }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
-        } else if (pendingMicrophone == null) {
-            pendingMicrophone = request;
-            requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO }, MICROPHONE);
+        String[] resources = request.getResources();
+        // Camera and microphone are requested independently, only for their UI action.
+        if (resources.length != 1) { request.deny(); return; }
+        boolean camera = PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resources[0]);
+        boolean microphone = PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0]);
+        if (!camera && !microphone) { request.deny(); return; }
+        String permission = camera ? Manifest.permission.CAMERA : Manifest.permission.RECORD_AUDIO;
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) request.grant(resources);
+        else if (pendingCamera == null && pendingMicrophone == null) {
+            if(camera) pendingCamera=request; else pendingMicrophone=request;
+            requestPermissions(new String[]{permission}, camera ? CAMERA : MICROPHONE);
         } else request.deny();
     }
-
     @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
-        if (code == MICROPHONE && pendingMicrophone != null) {
-            PermissionRequest request = pendingMicrophone;
-            pendingMicrophone = null;
-            if (!destroyed && visible && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-                request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
-            } else request.deny();
+        if (code == MICROPHONE || code == CAMERA) {
+            PermissionRequest request = code == CAMERA ? pendingCamera : pendingMicrophone;
+            if (code == CAMERA) pendingCamera=null; else pendingMicrophone=null;
+            if(request != null) {
+                if (!destroyed && visible && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                    request.grant(new String[]{code == CAMERA ? PermissionRequest.RESOURCE_VIDEO_CAPTURE : PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                } else request.deny();
+            }
         }
         if (code == BLUETOOTH) routeAudio();
     }
 
     private final class AudioBridge {
+        @JavascriptInterface public void setRinging(boolean value) {
+            main.post(() -> ring(value && visible && !destroyed));
+        }
+        @JavascriptInterface public void setRingback(boolean value) {
+            main.post(() -> ringBack(value && visible && !destroyed));
+        }
+        @JavascriptInterface public void savePhoto(String image) {
+            main.post(() -> {
+                if(destroyed || !visible || photoBytes != null || image == null || image.length() > 8000000 || !image.startsWith("data:image/jpeg;base64,")) { photoResult(false);return; }
+                try {
+                    photoBytes=Base64.decode(image.substring(23),Base64.DEFAULT);
+                    if(photoBytes.length<3 || photoBytes[0]!=(byte)0xff || photoBytes[1]!=(byte)0xd8)throw new IllegalArgumentException();
+                    Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/jpeg").addCategory(Intent.CATEGORY_OPENABLE)
+                            .putExtra(Intent.EXTRA_TITLE,"Lanu-Lens-"+System.currentTimeMillis()+".jpg");
+                    startActivityForResult(intent,SAVE_PHOTO);
+                }catch(RuntimeException e){photoBytes=null;photoResult(false);}
+            });
+        }
         @JavascriptInterface public void setCallActive(boolean value) {
             main.post(() -> { if (!destroyed) setActive(value && visible); });
         }
@@ -157,6 +208,60 @@ public class MainActivity extends Activity {
                 } else routeAudio();
             });
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void ring(boolean value) {
+        if(value==ringing)return;
+        ringing=value;
+        if(!value) {
+            main.removeCallbacks(repeatRing);
+            if(ringtone!=null){ringtone.stop();ringtone=null;}
+            if(vibrator!=null)vibrator.cancel();
+            return;
+        }
+        if(audio==null)return;
+        try {
+            int mode=audio.getRingerMode();
+            if(mode==AudioManager.RINGER_MODE_NORMAL) {
+                Uri uri=RingtoneManager.getActualDefaultRingtoneUri(this,RingtoneManager.TYPE_RINGTONE);
+                if(uri==null)uri=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+                ringtone=RingtoneManager.getRingtone(this,uri);
+                if(ringtone!=null){
+                    ringtone.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+                    if(Build.VERSION.SDK_INT>=28)ringtone.setLooping(true);
+                    ringtone.play();main.postDelayed(repeatRing,3000);
+                }
+            }
+            if(mode!=AudioManager.RINGER_MODE_SILENT){
+                vibrator=(Vibrator)getSystemService(VIBRATOR_SERVICE);
+                if(vibrator!=null&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0,700,700},0));
+            }
+        }catch(RuntimeException e){Log.w(TAG,"Ringtone unavailable; incoming controls remain visible");}
+    }
+    private void ringBack(boolean value) {
+        if(value==ringingBack)return;ringingBack=value;
+        main.removeCallbacks(repeatRingback);
+        if(ringback!=null){ringback.release();ringback=null;}
+        if(value)try{ringback=new ToneGenerator(AudioManager.STREAM_VOICE_CALL,60);repeatRingback.run();}
+        catch(RuntimeException e){Log.w(TAG,"Ringback unavailable");}
+    }
+    private void photoResult(boolean ok) {
+        if(web!=null&&!destroyed)web.evaluateJavascript("window.lanuPhotoSaved && window.lanuPhotoSaved("+ok+")",null);
+    }
+    @Override protected void onActivityResult(int code,int result,Intent data) {
+        super.onActivityResult(code,result,data);
+        if(code!=SAVE_PHOTO)return;
+        final byte[] bytes=photoBytes;photoBytes=null;
+        if(result!=RESULT_OK||data==null||data.getData()==null||bytes==null){photoResult(false);return;}
+        final Uri destination=data.getData();
+        files.execute(()->{
+            boolean ok=false;
+            try(OutputStream output=getContentResolver().openOutputStream(destination)){
+                if(output!=null){output.write(bytes);output.flush();ok=true;}
+            }catch(Exception e){Log.w(TAG,"Photo write failed");}
+            final boolean saved=ok;main.post(()->photoResult(saved));
+        });
     }
 
     @SuppressWarnings("deprecation")
@@ -234,6 +339,7 @@ public class MainActivity extends Activity {
                 "window.lanuPause && window.lanuPause(" + org.json.JSONObject.quote(message) + ")", null);
     }
     private void pauseCall(String message) {
+        ring(false); ringBack(false);
         notifyPage(message);
         setActive(false);
         if (pendingMicrophone != null) { pendingMicrophone.deny(); pendingMicrophone = null; }
@@ -244,20 +350,24 @@ public class MainActivity extends Activity {
     }
     @Override protected void onStop() {
         visible = false;
+        ring(false); ringBack(false);
+        if(web!=null)web.evaluateJavascript("window.lanuBackground && window.lanuBackground()",null);
         pauseCall("Uygulama arka plana alındı; görüşme kapatıldı.");
+        if(pendingCamera!=null){pendingCamera.deny();pendingCamera=null;}
         if (web != null) web.onPause();
         super.onStop();
     }
     @SuppressWarnings("deprecation")
     @Override public void onBackPressed() {
-        if (!active) { super.onBackPressed(); return; }
-        new AlertDialog.Builder(this).setMessage("Görüşmeyi kapatıp uygulamadan çıkılsın mı?")
-                .setNegativeButton("Vazgeç", null).setPositiveButton("Çık", (dialog, which) -> finish()).show();
+        if(web==null){super.onBackPressed();return;}
+        web.evaluateJavascript("window.lanuBack ? window.lanuBack() : false",handled->{if(!"true".equals(handled))finish();});
     }
     @Override protected void onDestroy() {
-        setActive(false);
+        ring(false); ringBack(false); setActive(false);
+        files.shutdown(); photoBytes=null;
         destroyed = true;
         if (pendingMicrophone != null) { pendingMicrophone.deny(); pendingMicrophone = null; }
+        if (pendingCamera != null) { pendingCamera.deny(); pendingCamera = null; }
         if (audio != null) audio.unregisterAudioDeviceCallback(devices);
         if (web != null) { web.removeJavascriptInterface("LanuAudio"); web.destroy(); web = null; }
         main.removeCallbacksAndMessages(null);

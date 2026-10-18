@@ -1,11 +1,10 @@
-LANU Sesli 1.1.0 — Android 8.0+ için debug imzalı test APK.
+# Lanu Lens 2.0.0
 
-- Altı haneli kodla iki uygulama arasında internet üzerinden sesli görüşme.
-- Gürültü azaltma, yankı önleme, otomatik dengeleme, mikrofon kapatma, Bluetooth/hoparlör yönlendirmesi.
-- İptal/izin yarışı, çift arama, kapanış döngüsü, bekleyen gelen arama, ağ kesintisi ve sınırlı yeniden bağlantı düzeltmeleri.
-- APK içine paketlenmiş PeerJS; köken ve kaynak bazlı mikrofon izni, harici gezinme engeli.
-- Yayın öncesi JS regresyon testleri, Android lint/derleme ve Android 35 emülatör WebView smoke testi; imza ve SHA-256 kontrolü.
+- Uygulama adı ve simgesi Lanu Lens olarak yenilendi.
+- Gerçek kamera: ön/arka kamera, desteklenen flaş, 3/10 saniye zamanlayıcı, ızgara, 1–3× dijital yakınlaştırma, JPEG çekim ve kullanıcı seçimiyle kayıt.
+- İlk ekranda özel alana ilişkin yazı, düğme veya giriş ipucu yok. Objektife üç saniye basma ve kişisel PIN ile giriş.
+- AES-GCM şifreli, isteğe bağlı uygulama içi rehber; karşılıklı kod eşleştirme isteği ve onayı; kişiden doğrudan arama/silme.
+- Özel alan açıkken gelen çağrıya sistem zil sesi/titreşim, arayana çalma tonu. Cevap/reddet/iptal/ağ kaybı/zaman aşımında temizlik.
+- Kilitleme, arka plan, geri tuşu ve hareketsizlikte özel alanı koruma. Kamera ve çağrı medyası ayrı tutulur; kilitte kaynaklar serbest bırakılır.
 
-Sınırlar: Normal telefon/WhatsApp aramalarını filtrelemez. Her iki tarafta LANU açık olmalıdır. Arka plana geçince görüşme kapanır. TURN sunucusu yoktur; bazı mobil/kurumsal ağlarda bağlanamayabilir. Filtre etkisi WebView ve cihaza bağlıdır. Gerçek iki telefon/Bluetooth/gürültülü ortam testi bu otomatik kontrollerin kapsamı dışındadır. Bu sürüm kalıcı üretim imzası taşımaz; imza değişirse eski kurulumu kaldırmak gerekebilir.
-
-Repo özeldir. APK'ya erişim için yetkili GitHub hesabıyla giriş gerekir. APK ve SHA256SUMS.txt bu sürüme eklenmiştir.
+İki cihazın özel alanı açık olmalıdır. Kapalı veya arka plandaki uygulamaya arama bildirimi yoktur. TURN yok; her ağda bağlantı garantisi yoktur. Debug test APK'sıdır. Kamera/mikrofon sistem göstergeleri görünür. Gerçek iki telefonda işitme, Bluetooth ve fiziksel kamera testleri ayrıca yapılmalıdır. Testlerin ayrıntılı kanıtı Actions kaydındadır; derleme tek başına gerçek cihaz doğrulaması değildir.

@@ -14,18 +14,19 @@ const server = http.createServer((req, res) => {
   let text = fs.readFileSync(file, 'utf8');
   if (file.endsWith('index.html')) text = text.replace('connect-src ', `connect-src http://127.0.0.1:${port} ws://127.0.0.1:${port} `);
   if (file.endsWith('app.js')) text = `
+  window.__qaRingEvents=[]; window.LanuAudio={setRinging:v=>window.__qaRingEvents.push(v),setRingback:v=>{window.__qaRingback=v;},setCallActive(){},setSpeaker(){},requestBluetooth(){}};
   const RealPeer = window.Peer;
   window.Peer = function(id, options) {
     const p = new RealPeer(id, {...options, host:'127.0.0.1', port:${port}, path:'/', secure:false, config:{iceServers:[]}});
     window.__qaPeer = p; return p;
   };
-  window.__qaTracks = [];
+  window.__qaTracks = []; window.__qaVideoTracks = [];
   const realCapture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
   navigator.mediaDevices.getUserMedia = async options => {
-    const stream = await realCapture(options); window.__qaTracks.push(...stream.getAudioTracks()); return stream;
+    const stream = await realCapture(options); window.__qaTracks.push(...stream.getAudioTracks()); window.__qaVideoTracks.push(...stream.getVideoTracks()); return stream;
   };
   ` + text;
-  res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript');
+  res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : 'application/javascript');
   res.end(text);
 });
 const ws = new WebSocketServer({server});
@@ -49,7 +50,7 @@ ws.on('connection', (socket, request) => {
 
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); port = server.address().port;
-  const browser = await chromium.launch({executablePath: process.env.LANU_CHROME_EXECUTABLE || '/usr/bin/google-chrome', headless:true,
+  const browser = await chromium.launch({executablePath: process.env.LANU_CHROME_EXECUTABLE || undefined, headless:true,
     args:['--no-sandbox', '--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']});
   try {
     const contexts = await Promise.all([browser.newContext({viewport:{width:390,height:844}}), browser.newContext({viewport:{width:390,height:844}})]);
@@ -57,13 +58,47 @@ ws.on('connection', (socket, request) => {
     const errors=[];
     for(const page of [a,b]) page.on('pageerror',e=>errors.push(String(e)));
     await Promise.all([a.goto(`http://127.0.0.1:${port}`),b.goto(`http://127.0.0.1:${port}`)]);
+    // The camera page must not start signaling, reveal calls or request a microphone.
+    for(const page of [a,b]) {
+      assert.equal(await page.locator('#privateView').isVisible(),false);
+      assert.equal(await page.evaluate(()=>!!window.__qaPeer),false);
+      const publicText=await page.locator('body').innerText();
+      assert.ok(!/görüşme|rehber|eşleştirme|gizli|PIN/i.test(publicText));
+    }
+    await a.locator('#startCamera').click();
+    await a.waitForFunction(()=>document.getElementById('preview').videoWidth>0);
+    await a.locator('#gridBtn').click();await a.locator('#zoom').evaluate(el=>{el.value='1.5';el.dispatchEvent(new Event('input'));});
+    await a.locator('#shutter').click();await a.locator('#photoView').waitFor({state:'visible'});
+    assert.match(await a.locator('#photoPreview').getAttribute('src'),/^data:image\/jpeg;base64,/);
+    await a.locator('#closePhoto').click();
+    async function unlock(page,first=true) {
+      await page.locator('#lensLogo').dispatchEvent('pointerdown');
+      await page.locator('#gate').waitFor({state:'visible'});
+      await page.locator('#lensLogo').dispatchEvent('pointerup');
+      await page.locator('#pin').fill('741963');
+      if(first) await page.locator('#pinConfirm').fill('741963');
+      await page.locator('#pinSubmit').click();
+      await page.locator('#privateView').waitFor({state:'visible'});
+    }
+    await Promise.all([unlock(a),unlock(b)]);
+    assert.equal(await a.evaluate(()=>window.__qaVideoTracks.every(t=>t.readyState==='ended')),true);
     await Promise.all([a,b].map(p=>p.waitForFunction(()=>!document.getElementById('callBtn').disabled)));
+    await a.locator('#contactsEnabled').check();await b.locator('#contactsEnabled').check();
+    await a.locator('#contactName').fill('Arkadaşım');
+    const pairingCode=await b.locator('#myid').innerText();
+    await a.locator('#pairCode').fill(pairingCode);await a.locator('#pairBtn').click();
+    await b.locator('#pairRequest').waitFor({state:'visible'});await b.locator('#pairAccept').click();
+    await a.locator('#contactList .contact').waitFor({state:'visible'});
+    await b.locator('#contactList .contact').waitFor({state:'visible'});
+    assert.equal(await a.evaluate(()=>window.__qaTracks.length),0);
     const code = await b.locator('#myid').innerText();
-    await a.locator('#partner').fill(code); await a.locator('#callBtn').click();
+    await a.locator('#contactList .contact button').first().click();
     await b.locator('#answerBtn').waitFor({state:'visible'});
     assert.equal(await b.evaluate(()=>window.__qaTracks.length),0);
+    assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),true);
     await b.locator('#answerBtn').click();
     await Promise.all([a,b].map(p=>p.waitForFunction(()=>document.getElementById('status').textContent==='Görüşme sürüyor.',{},{timeout:20000})));
+    assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),false);
     // Explicitly await async getStats results; a pending Promise is never proof of packets.
     await Promise.all([a,b].map(async page => {
       const limit=Date.now()+20000;
@@ -104,6 +139,13 @@ ws.on('connection', (socket, request) => {
     assert.equal(await a.evaluate(()=>window.__qaTracks.at(-1).readyState),'ended');
     assert.equal(await a.locator('#callBtn').isDisabled(),true);
     await b.waitForFunction(()=>!document.getElementById('callBtn').hidden);
+    assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),false);
+    await a.locator('#lockBtn').click();
+    assert.equal(await a.locator('#privateView').isVisible(),false);
+    assert.equal(await a.evaluate(()=>window.__qaPeer.destroyed),true);
+    await unlock(a,false);
+    await a.locator('#contactList .contact').waitFor({state:'visible'});
+    await a.locator('#lockBtn').click();
     assert.deepEqual(errors,[]);
     fs.mkdirSync('test-results', {recursive:true});
     await a.screenshot({path:'test-results/lanu-ui.png',fullPage:true});

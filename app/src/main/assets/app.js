@@ -6,6 +6,8 @@
   let peer = null, call = null, stream = null, state = 'idle', ready = false;
   let epoch = 0, timeout = null, retry = null, connectTimeout = null, transportTimeout = null, attempts = 0;
   let muted = false, paused = false, myId = '', collisions = 0;
+  const pairs = new Set();
+  let ringback = false;
 
   function say(message) { $('status').textContent = message; }
   function log(message) { console.warn('LANU: ' + message); } // No peer IDs or audio in logs.
@@ -19,7 +21,7 @@
     return String(Math.floor(100000 + Math.random() * 900000));
   }
   function native(method, value) {
-    try { if (window.LanuAudio) window.LanuAudio[method](value); }
+    try { if (window.LanuAudio && typeof window.LanuAudio[method] === 'function') window.LanuAudio[method](value); }
     catch (_) { log('Native audio route unavailable; system route retained'); }
   }
   function ui() {
@@ -30,6 +32,9 @@
     $('hangBtn').hidden = state === 'idle';
     $('muteBtn').hidden = state !== 'connected';
     $('retryBtn').hidden = ready && !paused;
+    native('setRinging', state === 'ringing' && !paused);
+    if (state !== 'dialing') { ringback = false; native('setRingback', false); }
+    if (window.LanuLens) window.LanuLens.callState(state);
   }
   function constraints() {
     const supported = navigator.mediaDevices.getSupportedConstraints
@@ -91,6 +96,7 @@
     } catch (_) { log('Call notification failed; connection timeout remains available'); }
   }
   function endCall(message, notify = true) {
+    ringback = false; native('setRinging', false); native('setRingback', false);
     epoch++; clearTimeout(timeout); timeout = null;
     clearTimeout(transportTimeout); transportTimeout = null;
     const oldCall = call, oldStream = stream;
@@ -216,14 +222,14 @@
     if (token !== epoch) return;
     log('Microphone or call setup failed: ' + (error.name || 'unknown'));
     const messages = {
-      NotAllowedError: 'Mikrofon izni verilmedi. Telefon ayarlarından LANU Sesli için mikrofonu açıp tekrar deneyin.',
+      NotAllowedError: 'Mikrofon izni verilmedi. Telefon ayarlarından Lanu Lens için mikrofonu açıp tekrar deneyin.',
       NotFoundError: 'Mikrofon bulunamadı. Kulaklığınızı kontrol edin.',
       NotReadableError: 'Mikrofon başka uygulamada kullanılıyor veya açılamadı.'
     };
     endCall(messages[error.name] || 'Görüşme başlatılamadı. Bağlantıyı ve mikrofonu kontrol edin.');
   }
   async function dial() {
-    if (state !== 'idle' || !ready || !peer || paused) return;
+    if (state !== 'idle' || !ready || !peer || paused || (window.LanuLens && !window.LanuLens.isOpen())) return;
     const id = $('partner').value.trim();
     if (!/^[1-9]\d{5}$/.test(id)) { say('6 haneli geçerli kodu yaz.'); return; }
     if (id === myId) { say('Kendi kodunu arayamazsın.'); return; }
@@ -256,7 +262,8 @@
       attempts++;
       if (peer && !peer.destroyed && peer.disconnected) {
         try { peer.reconnect(); watchConnection(peer); } catch (_) { start(myId); }
-      } else start(myId);
+      } else if (!window.LanuLens || window.LanuLens.isOpen()) start(myId);
+  else ui();
     }, Math.min(1000 * Math.pow(2, attempts), 8000));
   }
   function watchConnection(current) {
@@ -274,7 +281,7 @@
     if (peer) { const old = peer; peer = null; try { old.destroy(); } catch (_) { } }
     ready = false; ui();
     if (navigator.onLine === false) { say('İnternet bağlantısı yok. Bağlanınca yeniden denenecek.'); return; }
-    if (paused) { say('Uygulamaya dönüp yeniden bağlan.'); return; }
+    if (paused || (window.LanuLens && !window.LanuLens.isOpen())) { say('Uygulamaya dönüp yeniden bağlan.'); return; }
     if (typeof Peer === 'undefined') { say('Görüşme bileşeni açılamadı. Uygulamayı yeniden başlatın.'); return; }
     const current = new Peer(PREFIX + id, {
       secure: true, debug: 0,
@@ -313,18 +320,23 @@
       reconnectSoon();
     });
     current.on('call', connection => {
-      if (peer !== current || paused || state !== 'idle' || !/^lanu-sesli-[1-9]\d{5}$/.test(connection.peer)) {
+      if (peer !== current || paused || (window.LanuLens && !window.LanuLens.isOpen()) || state !== 'idle' || !/^lanu-sesli-[1-9]\d{5}$/.test(connection.peer)) {
         control(connection, 'busy'); connection.close(); return;
       }
       const token = ++epoch; state = 'ringing'; attach(connection, token);
+      control(connection, 'ringing');
       deadline(token, 'Gelen arama zaman aşımına uğradı.'); ui(); say('Gelen arama: ' + connection.peer.slice(PREFIX.length));
     });
     current.on('connection', channel => {
+      if (channel.label === 'lanu-pair-v1') { receivePair(channel); return; }
       if (channel.label !== 'lanu-control' || !channel.metadata || channel.metadata.lanuControl !== 1) { channel.close(); return; }
       const timer = setTimeout(() => channel.close(), 5000);
       channel.on('close', () => clearTimeout(timer));
       channel.on('error', () => { clearTimeout(timer); channel.close(); });
       channel.on('data', data => {
+        if (data && call && channel.peer === call.peer && data.id === call.connectionId && data.type === 'ringing' && state === 'dialing') {
+          ringback = true; native('setRingback', true);
+        }
         if (data && call && channel.peer === call.peer && data.id === call.connectionId
             && (data.type === 'hangup' || data.type === 'busy')) {
           endCall(data.type === 'busy' ? 'Karşı taraf başka bir görüşmede.' : 'Karşı taraf aramayı kapattı.', false);
@@ -333,6 +345,62 @@
       });
     });
   }
+  function pairStatus(text) { if (window.LanuLens) window.LanuLens.pairStatus(text); }
+  function pairSession(channel, receiver) {
+    const session = {channel, finished:false}; pairs.add(session);
+    session.close = () => {
+      if(session.finished)return; session.finished=true; clearTimeout(session.timer); pairs.delete(session);
+      if(receiver && window.LanuLens) window.LanuLens.clearPair();
+      try { channel.close(); } catch (_) { }
+    };
+    session.timer=setTimeout(()=>{pairStatus('Eşleştirme zaman aşımına uğradı.');session.close();},45000);
+    channel.on('close',()=>{if(!session.finished){if(!session.replied)pairStatus('Eşleştirme bağlantısı kapandı.');session.close();}});
+    channel.on('error',()=>{pairStatus('Eşleştirme bağlantısı kurulamadı.');session.close();});
+    return session;
+  }
+  function pair(code) {
+    if(!window.LanuLens || !window.LanuLens.isOpen() || !ready || paused || state!=='idle') {pairStatus('Önce bağlantının hazır olmasını bekle.');return;}
+    if(!/^[1-9]\d{5}$/.test(code)||code===myId){pairStatus('Karşı tarafın geçerli 6 haneli kodunu yaz.');return;}
+    if(pairs.size){pairStatus('Mevcut eşleştirme isteğinin sonuçlanmasını bekle.');return;}
+    try {
+      const nonce=Array.from(window.crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+      const channel=peer.connect(PREFIX+code,{reliable:true,label:'lanu-pair-v1'}), session=pairSession(channel,false);
+      pairStatus('Karşı tarafın onayı bekleniyor…');
+      channel.on('open',()=>{if(!session.finished)channel.send({type:'request',nonce});});
+      channel.on('data',data=>{
+        if(session.finished||!data||data.nonce!==nonce)return;
+        if(data.type==='accepted') { pairStatus('İki tarafın eşleşmesi onaylandı.');window.LanuLens.paired(code); }
+        else if(data.type==='rejected') pairStatus('Eşleştirme isteği reddedildi.');
+        else return;
+        session.close();
+      });
+    }catch(_){pairStatus('Eşleştirme başlatılamadı. Yeniden dene.');}
+  }
+  function receivePair(channel) {
+    if(!window.LanuLens || !window.LanuLens.isOpen() || paused || state!=='idle' || pairs.size || !/^lanu-sesli-[1-9]\d{5}$/.test(channel.peer)){channel.close();return;}
+    const session=pairSession(channel,true);let requested=false;
+    channel.on('data',data=>{
+      if(session.finished||requested||!data||data.type!=='request'||!/^[a-f0-9]{32}$/.test(data.nonce||'')){session.close();return;}
+      requested=true;
+      window.LanuLens.pairRequest(channel.peer.slice(PREFIX.length),accepted=>{
+        if(session.finished)return;
+        try {channel.send({type:accepted?'accepted':'rejected',nonce:data.nonce});}
+        catch(_){pairStatus('Eşleştirme yanıtı gönderilemedi.');session.close();return;}
+        session.replied=true;pairStatus(accepted?'Eşleştirme onaylandı.':'Eşleştirme reddedildi.');
+        // Let the reliable data channel deliver the response before closing.
+        clearTimeout(session.timer);session.timer=setTimeout(session.close,1000);
+      });
+    });
+  }
+  window.LanuCalls = {
+    activate() { window.lanuResume(); $('myid').textContent=myId; },
+    deactivate() {
+      window.lanuPause('Alan kilitlendi.'); pairs.forEach(session=>session.close());
+      if(peer){const old=peer;peer=null;old.destroy();} ready=false;ui();
+    },
+    dial(code) { if(window.LanuLens && window.LanuLens.isOpen()){$('partner').value=code;dial();} },
+    pair, state:()=>state
+  };
   ['ns', 'ec', 'agc'].forEach(id => {
     const saved = safeGet('lanu-' + id); if (saved !== null) $(id).checked = saved === 'true';
     $(id).addEventListener('change', async () => {
@@ -370,6 +438,7 @@
     endCall(message || 'Görüşme kapatıldı.');
   };
   window.lanuResume = () => {
+    if (window.LanuLens && !window.LanuLens.isOpen()) return;
     paused = false;
     // WebView can suspend a PeerJS socket while the page is hidden without
     // delivering the disconnected event. Never let stale ready=true enable
@@ -399,5 +468,6 @@
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     say('Mikrofon desteği yok. Android System WebView bileşenini güncelleyin.'); ui();
-  } else start(myId);
+  } else if (!window.LanuLens || window.LanuLens.isOpen()) start(myId);
+  else ui();
 })();

@@ -1,17 +1,27 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self'; base-uri 'none'; form-action 'none'">
-  <title>LANU Sesli</title>
-  <link rel="stylesheet" href="style.css">
-  <script defer src="vendor/peerjs.min.js"></script>
-  <script defer src="app.js"></script>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#101217"><title>Lanu Lens</title>
+  <link rel="icon" href="lens.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
 </head>
 <body>
-  <header><div class="logo">LANU</div><h1>Sesli görüşme</h1><p>Sesin öne çıksın.</p></header>
-  <main>
+  <main id="cameraView" class="camera-shell">
+    <header class="camera-header"><button id="lensLogo" class="brand" aria-label="Lanu Lens"><img src="lens.svg" alt="" width="36" height="36"><span>LANU <b>LENS</b></span></button><span class="eyebrow">FOTOĞRAF</span></header>
+    <div class="viewfinder"><video id="preview" autoplay muted playsinline></video><div id="cameraGrid" hidden></div><div id="cameraEmpty"><img src="lens.svg" width="88" height="88" alt=""><h1>Anı yakala.</h1><p>Işığı bul, kadrajını oluştur.</p><button id="startCamera">Kamerayı aç</button></div><span id="countdown" hidden></span></div>
+    <p id="cameraStatus" class="camera-status" role="status">Fotoğraf çekmek için kamerayı aç.</p>
+    <div class="camera-options"><button id="flashBtn" class="tool" aria-pressed="false" disabled>Flaş kapalı</button><button id="timerBtn" class="tool">Süre kapalı</button><button id="gridBtn" class="tool" aria-pressed="false">Izgara</button></div>
+    <label class="zoom-control" for="zoom">Yakınlaştırma <input id="zoom" type="range" min="1" max="3" step="0.1" value="1" disabled><span id="zoomValue">1×</span></label>
+    <div class="camera-bottom"><button id="lastPhoto" class="thumbnail" aria-label="Son fotoğraf" disabled><span>Fotoğraf</span></button><button id="shutter" aria-label="Fotoğraf çek" disabled><span></span></button><button id="switchCamera" class="tool" disabled>Çevir</button></div>
+    <p class="camera-footer">LANU LENS · Kendi bakış açın.</p>
+  </main>
+  <section id="photoView" class="overlay" hidden aria-label="Fotoğraf önizleme"><img id="photoPreview" alt="Çekilen fotoğraf"><p id="photoStatus" role="status"></p><button id="savePhoto">Fotoğrafı kaydet</button><button id="closePhoto" class="secondary">Kameraya dön</button></section>
+  <section id="gate" class="overlay gate" hidden role="dialog" aria-modal="true" aria-labelledby="gateTitle"><img src="lens.svg" width="64" height="64" alt=""><h1 id="gateTitle">PIN</h1><form id="pinForm"><label for="pin" id="pinLabel">6–12 haneli PIN</label><input id="pin" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" required><label for="pinConfirm" id="confirmLabel" hidden>PIN tekrar</label><input id="pinConfirm" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" hidden><button id="pinSubmit" type="submit">Devam</button></form><p id="gateStatus" role="status"></p><button id="cancelGate" class="secondary">Vazgeç</button></section>
+  <section id="privateView" hidden aria-label="Görüşmeler">
+  <div class="private-content">
+    <div class="private-title"><div><span class="eyebrow">LANU LENS</span><h1>Görüşmeler</h1></div><button id="lockBtn" class="compact secondary">Kilitle</button></div>
     <section class="card number"><div class="label">Görüşme kodun</div><div id="myid" class="myid">······</div><p class="hint">Bu kodu yalnızca görüşmek istediğin kişiyle paylaş.</p></section>
     <section class="card">
       <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
@@ -32,8 +42,17 @@
       <p id="filterStatus" class="hint">Filtreler mikrofonundan karşıya giden sese uygulanır. Sonuç cihazın WebView desteğine bağlıdır.</p>
     </section>
     <section class="card" aria-live="polite"><div id="status" role="status">Bağlanıyor…</div><button id="retryBtn" class="secondary" hidden>Yeniden bağlan</button></section>
+    <section class="card">
+      <h2>Kod eşleştirme</h2><p class="hint">Diğer kişi özel alanı açıp isteği onaylasın. Kodlar kimlik doğrulama yerine geçmez.</p>
+      <label class="label" for="pairCode">Karşı tarafın kodu</label><input id="pairCode" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 haneli kod">
+      <label class="label" for="contactName">Kişiye vereceğin ad</label><input id="contactName" type="text" maxlength="40" autocomplete="off" placeholder="İsteğe bağlı ad">
+      <button id="pairBtn">Eşleştirme isteği gönder</button><p id="pairStatus" class="hint" role="status"></p>
+      <div id="pairRequest" hidden><p id="pairFrom"></p><label class="row"><span>Rehbere kaydet</span><input type="checkbox" id="saveIncoming"></label><button id="pairAccept" class="green">Onayla</button><button id="pairReject" class="secondary">Reddet</button></div>
+    </section>
+    <section class="card"><label class="row"><span>Uygulama içi rehber</span><input type="checkbox" id="contactsEnabled"></label><p class="hint">İsteğe bağlıdır. Telefon rehberine erişilmez. Rehber kapalıyken kodla arayabilirsin.</p><div id="contactList"></div></section>
+    <section class="card"><h2>Güvenlik</h2><p class="hint">PIN ve rehber bu cihazda tutulur. PIN unutulursa kurtarılamaz. Alanı kilitlemek görüşmeyi sonlandırır.</p><button id="changePin" class="secondary">PIN değiştir</button></section>
     <p class="hint footer">İki kişi de uygulamayı açmalı. İnternet gerekir; normal telefon numaraları aranmaz. Arka plana geçmek görüşmeyi kapatır. Ses kaydı tutulmaz.</p>
-  </main>
+  </div>
+  </section>
   <audio id="remote" autoplay playsinline></audio>
-</body>
-</html>
+</body></html>
