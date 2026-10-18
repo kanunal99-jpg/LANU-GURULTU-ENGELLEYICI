@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases/latest). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.0.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.0.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -10,15 +10,15 @@ Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda fl
 
 Özel alanda iki kullanıcı görüşme kodlarını paylaşır. Kod eşleştirme isteğini karşı taraf açıkça onaylar. Uygulama içi rehber varsayılan olarak kapalıdır; her kullanıcı kendisi açabilir. Açıkken onaylanan eşleşmeler takma adla saklanır; kaydedilmiş kişinin Ara düğmesi kodu yeniden yazmadan arar. Kapalıyken kodla tek görüşme yapılabilir. Rehberi kapatmak mevcut şifreli kayıtları silmez; kişi satırındaki Sil düğmesi siler. Telefon rehberine erişim izni istenmez.
 
-Gelen görüşme, özel alan açıkken sistem zil sesi ve titreşimle haber verir. Sessiz/titreşim modu korunur. Cevapla, reddet, karşı tarafın kapatması, ağ kaybı ve 45 saniye zaman aşımında zil durur. Arayan taraf, alıcıya ulaşıldığında çalma tonu duyar. Mikrofon yalnızca arayan aramayı başlatınca ve alıcı Cevapla seçince açılır. Gelen çağrı kameraya veya ilk ekrana kişi/kod taşımaz.
+Gelen görüşme, uygulama açıkken özel alan veya kamera ekranında sistem zil sesi ve titreşimle haber verir. Sessiz/titreşim modu korunur. Cevapla, reddet, karşı tarafın kapatması, ağ kaybı ve 45 saniye zaman aşımında zil durur. Arayan taraf, alıcıya ulaşıldığında çalma tonu duyar. Mikrofon yalnızca arayan aramayı başlatınca ve alıcı Cevapla seçince açılır. Gelen çağrı kameraya veya ilk ekrana kişi/kod taşımaz. Kamera ekranında çalan çağrıyı cevaplamak için PIN ile giriş gerekir. Bu alma seçeneği özel alandaki ayardan kapatılabilir.
 
-Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve arka plana geçiş özel alanı kilitler. Görüşme biter, mikrofon/kamera ve sinyalleşme bırakılır. Android ekran görüntüsü/son uygulamalar önizlemesi FLAG_SECURE ile korunur. Kullanıcı fotoğrafları yalnızca Kaydet seçildiğinde sistem dosya seçicisiyle dışarı aktarılır.
+Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve arka plana geçiş özel alanı kilitler. Görüşme biter, mikrofon/kamera bırakılır. Kamera ekranında çağrı alma açıksa yalnızca uygulama ön plandayken sinyalleşme sürer; arka planda tamamen bırakılır. Android ekran görüntüsü/son uygulamalar önizlemesi FLAG_SECURE ile korunur. Kullanıcı fotoğrafları yalnızca Kaydet seçildiğinde sistem dosya seçicisiyle dışarı aktarılır.
 
 ## Gizlilik ve teknik sınırlar
 
 - PIN'den PBKDF2-SHA256 (310.000 tur) ile anahtar türetilir; rehber AES-256-GCM ile rastgele salt/IV kullanılarak cihazda şifrelenir. Anahtar kilitlemede bellekten bırakılır. PIN kurtarma servisi yoktur; PIN unutulursa uygulama verilerini temizlemek tüm kayıtları siler. PIN'e beş başarısız denemeden sonra bir dakika bekleme uygulanır. Bu cihaz içi sınır, cihazın sahibi tarafından depolamanın değiştirilmesine karşı sunucu koruması değildir.
 - Altı haneli görüşme kodu kimlik doğrulaması değildir. Kod eşleştirme karşılıklı kullanıcı onayı sağlar; kişi kimliğini kriptografik olarak doğrulamaz. Sonraki her çağrı alıcının cevaplamasını gerektirir. Kodu yalnızca güvendiğin kişiyle paylaş.
-- **İki uygulamada özel alan açık olmalıdır.** Kapalı/kilitli uygulamaya veya arka plana gelen arama bu sürümde desteklenmez. FCM/push, kalıcı arka plan çağrı servisi ve operatör araması yoktur. Normal çağrıya benzer zil, mevcut uygulama içi görüşme içindir.
+- **İki uygulama ön planda açık olmalıdır.** Kamera ekranındaki kilitli alan, çağrı alma açıksa zil çalar; PIN ile girilmeden mikrofon açılmaz. Tamamen kapalı uygulamaya veya arka plana gelen arama bu sürümde desteklenmez. FCM/push, kalıcı arka plan çağrı servisi ve operatör araması yoktur. Normal çağrıya benzer zil, mevcut uygulama içi görüşme içindir.
 - Mikrofon/kamera kullanımının Android göstergeleri sistemde görünür. Kamera yalnızca kamerayı açma eyleminde izin ister; açılışta mikrofon izni veya görüşme sunucusu bağlantısı kurulmaz.
 - PeerJS Cloud ile sinyalleşme, Google/Cloudflare STUN alternatifleri kullanılır. TURN aktarma sunucusu yoktur; simetrik NAT/kurumsal ağlarda bağlantı kurulamayabilir. Ağ kesintisinde sınırlı yeniden deneme, açık hata ve zaman aşımı uygulanır. Ücretli servis açılmamıştır.
 - Ses kaydı tutulmaz. Gürültü/yankı azaltma ve otomatik seviye dengelemesi cihazın WebRTC desteğine bağlıdır. Kod ve filtre tercihleri yerelde, rehber şifreli saklanır. Loglar kişi adlarını, kodları ve sesi içermez.

@@ -9,6 +9,7 @@
   const pairs = new Set();
   let ringback = false;
 
+  function available() {return !window.LanuLens || window.LanuLens.isOpen() || (typeof window.LanuLens.canReceive==='function' && window.LanuLens.canReceive());}
   function say(message) { $('status').textContent = message; }
   function log(message) { console.warn('LANU: ' + message); } // No peer IDs or audio in logs.
   function safeGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
@@ -244,7 +245,7 @@
     } catch (error) { mediaError(error, token); }
   }
   async function answer() {
-    if (state !== 'ringing' || !call || paused) return;
+    if (state !== 'ringing' || !call || paused || (window.LanuLens && !window.LanuLens.isOpen())) return;
     const connection = call, token = epoch;
     state = 'preparing'; ui(); say('Mikrofon açılıyor…');
     try {
@@ -262,7 +263,7 @@
       attempts++;
       if (peer && !peer.destroyed && peer.disconnected) {
         try { peer.reconnect(); watchConnection(peer); } catch (_) { start(myId); }
-      } else if (!window.LanuLens || window.LanuLens.isOpen()) start(myId);
+      } else if (available()) start(myId);
   else ui();
     }, Math.min(1000 * Math.pow(2, attempts), 8000));
   }
@@ -281,7 +282,7 @@
     if (peer) { const old = peer; peer = null; try { old.destroy(); } catch (_) { } }
     ready = false; ui();
     if (navigator.onLine === false) { say('İnternet bağlantısı yok. Bağlanınca yeniden denenecek.'); return; }
-    if (paused || (window.LanuLens && !window.LanuLens.isOpen())) { say('Uygulamaya dönüp yeniden bağlan.'); return; }
+    if (paused || !available()) { say('Uygulamaya dönüp yeniden bağlan.'); return; }
     if (typeof Peer === 'undefined') { say('Görüşme bileşeni açılamadı. Uygulamayı yeniden başlatın.'); return; }
     const current = new Peer(PREFIX + id, {
       secure: true, debug: 0,
@@ -320,7 +321,7 @@
       reconnectSoon();
     });
     current.on('call', connection => {
-      if (peer !== current || paused || (window.LanuLens && !window.LanuLens.isOpen()) || state !== 'idle' || !/^lanu-sesli-[1-9]\d{5}$/.test(connection.peer)) {
+      if (peer !== current || paused || !available() || state !== 'idle' || !/^lanu-sesli-[1-9]\d{5}$/.test(connection.peer)) {
         control(connection, 'busy'); connection.close(); return;
       }
       const token = ++epoch; state = 'ringing'; attach(connection, token);
@@ -394,9 +395,10 @@
   }
   window.LanuCalls = {
     activate() { window.lanuResume(); $('myid').textContent=myId; },
-    deactivate() {
+    deactivate(listen = false) {
       window.lanuPause('Alan kilitlendi.'); pairs.forEach(session=>session.close());
-      if(peer){const old=peer;peer=null;old.destroy();} ready=false;ui();
+      if(!listen){if(peer){const old=peer;peer=null;old.destroy();} ready=false;ui();}
+      else {paused=false;if(!peer||peer.destroyed||peer.disconnected||!ready)start(myId||newId());else ui();}
     },
     dial(code) { if(window.LanuLens && window.LanuLens.isOpen()){$('partner').value=code;dial();} },
     pair, state:()=>state
@@ -438,7 +440,7 @@
     endCall(message || 'Görüşme kapatıldı.');
   };
   window.lanuResume = () => {
-    if (window.LanuLens && !window.LanuLens.isOpen()) return;
+    if (!available()) return;
     paused = false;
     // WebView can suspend a PeerJS socket while the page is hidden without
     // delivering the disconnected event. Never let stale ready=true enable
@@ -468,6 +470,6 @@
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     say('Mikrofon desteği yok. Android System WebView bileşenini güncelleyin.'); ui();
-  } else if (!window.LanuLens || window.LanuLens.isOpen()) start(myId);
+  } else if (available()) start(myId);
   else ui();
 })();

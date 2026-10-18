@@ -5,6 +5,8 @@
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
   let incomingPair = null, writes = Promise.resolve(), lastCallState = 'idle';
   const message = text => { $('cameraStatus').textContent = text; };
+  let allowIncoming=false,suspended=document.hidden;
+  try{allowIncoming=localStorage.getItem('lens-listen')==='true'&&localStorage.getItem('lens-vault-v1')!==null;}catch(_){}
   const calls = () => window.LanuCalls;
   const storage = () => window.localStorage;
   function stopCamera() {
@@ -82,7 +84,8 @@
       if(token!==gateEpoch)return;
       const data=mode==='unlock'?await vault.unlock(pin):await vault.create(pin);
       if(token!==gateEpoch){vault.lock();return;}
-      storage().removeItem('lens-failures');storage().removeItem('lens-delay');
+      try{storage().removeItem('lens-failures');storage().removeItem('lens-delay');}catch(_){}
+      allowIncoming=data.incomingEnabled!==false;try{storage().setItem('lens-listen',String(allowIncoming));}catch(_){allowIncoming=false;}$('incomingEnabled').checked=allowIncoming;
       opened=true;$('gate').hidden=true;$('cameraView').hidden=true;$('privateView').hidden=false;
       $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();touch();
       if(calls())calls().activate();
@@ -94,9 +97,9 @@
       $('gateStatus').textContent=e.message==='Wait'?'Çok fazla deneme. Bir dakika sonra tekrar dene.':mode==='unlock'?'PIN doğrulanamadı veya kayıt okunamadı.':'PIN kaydedilemedi. Cihaz depolamasını kontrol et.';
     }finally{if(token===gateEpoch)$('pinSubmit').disabled=false;}
   }
-  function lock() {
+  function lock(listen = true) {
     gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
-    if(calls())calls().deactivate(); if(vault)vault.lock();
+    if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
     $('privateView').hidden=$('gate').hidden=true;$('cameraView').hidden=false;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
@@ -129,7 +132,7 @@
     const name=$('contactName').value.trim().slice(0,40)||code;
     await persist(data=>{const found=data.contacts.find(c=>c.code===code);if(found)found.name=name;else if(data.contacts.length<200)data.contacts.push({code,name});});
   }
-  window.LanuLens={isOpen:()=>opened,lock,stopCamera,
+  window.LanuLens={isOpen:()=>opened,canReceive:()=>allowIncoming&&!suspended,lock,stopCamera,
     callState(state){if(state!=='idle')stopCamera();if(opened&&state==='ringing'&&lastCallState!=='ringing')$('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});lastCallState=state;touch();},
     pairStatus(text){if(opened)$('pairStatus').textContent=text;},
     paired,
@@ -141,7 +144,8 @@
     clearPair(){incomingPair=null;$('pairRequest').hidden=true;}
   };
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
-  window.lanuBackground=()=>{if(opened||!$('gate').hidden)lock();else stopCamera();};
+  window.lanuForeground=()=>{suspended=false;};
+  window.lanuBackground=()=>{suspended=true;lock(false);};
   window.lanuBack=()=>{if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
   $('lensLogo').addEventListener('pointerdown',()=>{clearTimeout(hold);hold=setTimeout(()=>gate(),3000);});
   ['pointerup','pointercancel','pointerleave'].forEach(e=>$('lensLogo').addEventListener(e,()=>clearTimeout(hold)));
@@ -161,11 +165,12 @@
     else{const link=document.createElement('a');link.href=photo;link.download='Lanu-Lens-'+Date.now()+'.jpg';link.click();$('photoStatus').textContent='Fotoğraf indirme isteği gönderildi.';}
   });
   $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
-  $('lockBtn').addEventListener('click',lock);$('changePin').addEventListener('click',()=>gate(true));
+  $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
+  $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});
   $('pairBtn').addEventListener('click',()=>{if(opened)calls().pair($('pairCode').value.trim());});
   $('pairAccept').addEventListener('click',()=>{if(!incomingPair)return;const req=incomingPair;incomingPair=null;$('pairRequest').hidden=true;req.respond(true);if($('saveIncoming').checked)paired(req.code);});
   $('pairReject').addEventListener('click',()=>{if(incomingPair)incomingPair.respond(false);incomingPair=null;$('pairRequest').hidden=true;});
   document.addEventListener('pointerdown',touch);document.addEventListener('keydown',touch);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(hold);window.lanuBackground();}});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(hold);window.lanuBackground();}else window.lanuForeground();});
 })();

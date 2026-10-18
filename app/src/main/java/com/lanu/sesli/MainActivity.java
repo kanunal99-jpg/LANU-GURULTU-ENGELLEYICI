@@ -348,7 +348,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume(); visible = true;
-        if (web != null) { web.onResume(); web.evaluateJavascript("window.lanuResume && window.lanuResume()", null); }
+        if (web != null) { web.onResume(); web.evaluateJavascript("window.lanuForeground && window.lanuForeground(); window.lanuResume && window.lanuResume()", null); }
     }
     @Override protected void onStop() {
         visible = false;

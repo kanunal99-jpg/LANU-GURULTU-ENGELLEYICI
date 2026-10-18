@@ -22,7 +22,7 @@
     }
     async create(pin) {
       const salt = this.crypto.getRandomValues(new Uint8Array(16)), key = await this.derive(pin,salt);
-      const data = this.data || {contactsEnabled:false,contacts:[]};
+      const data = this.data || {contactsEnabled:false,contacts:[],incomingEnabled:true};
       await this.write(data,key,salt); this.key = key; this.salt = salt; this.data = data; return data;
     }
     async write(data, key = this.key, salt = this.salt) {

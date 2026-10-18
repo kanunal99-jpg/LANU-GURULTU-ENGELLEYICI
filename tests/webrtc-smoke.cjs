@@ -92,10 +92,12 @@ ws.on('connection', (socket, request) => {
     await b.locator('#contactList .contact').waitFor({state:'visible'});
     assert.equal(await a.evaluate(()=>window.__qaTracks.length),0);
     const code = await b.locator('#myid').innerText();
+    const callerCode = await a.locator('#myid').innerText();
     await a.locator('#contactList .contact button').first().click();
     await b.locator('#answerBtn').waitFor({state:'visible'});
     assert.equal(await b.evaluate(()=>window.__qaTracks.length),0);
     assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),true);
+    await a.waitForFunction(()=>window.__qaRingback===true);
     await b.locator('#answerBtn').click();
     await Promise.all([a,b].map(p=>p.waitForFunction(()=>document.getElementById('status').textContent==='Görüşme sürüyor.',{},{timeout:20000})));
     assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),false);
@@ -142,8 +144,20 @@ ws.on('connection', (socket, request) => {
     assert.equal(await b.evaluate(()=>window.__qaRingEvents.at(-1)),false);
     await a.locator('#lockBtn').click();
     assert.equal(await a.locator('#privateView').isVisible(),false);
-    assert.equal(await a.evaluate(()=>window.__qaPeer.destroyed),true);
+    assert.equal(await a.evaluate(()=>window.__qaPeer.destroyed),false);
+    // A locked camera can ring without exposing any call UI or opening the microphone.
+    await b.locator('#partner').fill(callerCode);await b.locator('#callBtn').click();
+    await a.waitForFunction(()=>window.__qaRingEvents.at(-1)===true);
+    assert.equal(await a.locator('#privateView').isVisible(),false);
+    assert.ok(!/görüşme|rehber|eşleştirme|gizli|PIN/i.test(await a.locator('body').innerText()));
+    const microphoneCount=await a.evaluate(()=>window.__qaTracks.length);
     await unlock(a,false);
+    await a.locator('#answerBtn').click();
+    await a.waitForFunction(()=>document.getElementById('status').textContent==='Görüşme sürüyor.');
+    assert.equal(await a.evaluate(()=>window.__qaTracks.length),microphoneCount+1);
+    assert.equal(await a.evaluate(()=>window.__qaRingEvents.at(-1)),false);
+    await b.locator('#hangBtn').click();
+    await a.waitForFunction(()=>!document.getElementById('callBtn').hidden);
     await a.locator('#contactList .contact').waitFor({state:'visible'});
     await a.locator('#lockBtn').click();
     assert.deepEqual(errors,[]);

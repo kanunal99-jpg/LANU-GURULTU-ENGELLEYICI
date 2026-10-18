@@ -48,7 +48,7 @@ function harness(options = {}) {
     clearTimeout(id) { timers.delete(id); },
     addEventListener(event, fn) { events[event] = fn; },
     LanuAudio: {setRinging:value=>ringing.push(value),setRingback:value=>ringback.push(value),setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
-  if(options.lens) context.LanuLens={isOpen:()=>options.lensOpen!==false,callState(){},pairStatus(){},clearPair(){}};
+  if(options.lens) context.LanuLens={canReceive:()=>options.lensListen===true,isOpen:()=>options.lensOpen!==false,callState(){},pairStatus(){},clearPair(){}};
   context.window = context;
   vm.runInNewContext(source, context);
   const get = id => document.getElementById(id);
@@ -522,4 +522,10 @@ test('answering stops ringtone before microphone permission resolves',()=>{
 test('locking Lens destroys signaling and releases active audio',async()=>{
  const h=harness({lens:true,lensOpen:true});h.open();h.get('partner').value='654321';h.click('callBtn');h.resolve();await h.flush();
  h.context.LanuCalls.deactivate();assert.equal(h.track.stopped,1);assert.equal(h.peers[0].destroyed,true);assert.equal(h.ringing.at(-1),false);assert.equal(h.ringback.at(-1),false);
+});
+
+test('camera standby rings with PIN locked but cannot answer or capture audio before unlock',()=>{
+ const h=harness({lens:true,lensOpen:false,lensListen:true});h.open();const call=new h.Connection();h.peers[0].emit('call',call);
+ assert.equal(h.ringing.at(-1),true);assert.equal(h.requested(),0);h.click('answerBtn');assert.equal(h.requested(),0);assert.equal(call.answered,0);
+ h.context.LanuCalls.deactivate(false);assert.equal(h.ringing.at(-1),false);assert.equal(h.peers[0].destroyed,true);
 });
