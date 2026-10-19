@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.2.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.3.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -20,11 +20,17 @@ Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve 
 
 Kod değişince karşı tarafların rehberinde eski kod kalabilir; yeni kodunu paylaşman gerekir. Kodlar kişiye ait kriptografik kanıt sunmaz ve tek başına güvenlik mekanizması değildir.
 
+## Android gelen çağrı bildirimleri (2.0.3)
+
+PIN ile açılan özel alanda **Arka planda çağrı dinle** seçeneği varsayılan olarak kapalıdır. Kullanıcı izin verirse Android 13+ bildirim izni ve sürekli bir foreground-service bildirimi ile uygulama işlemi açık tutulmaya çalışılır. Android gelen çağrı bildirimi ses/titreşimle beraber gösterilir; bildirime dokunulması çağrıyı doğrudan cevaplamaz, PIN ekranını açar. Kilit ekranında kişi ve kod bilgileri gizlidir. Arka plana geçiş aktif görüşmeyi ve mikrofonu kapatır, yalnızca boşta sinyalleşme bağlantısı denenir.
+
+**Önemli:** Bu özellik kullanıcı arka plana geçerken **uygulama hâlâ çalışıyorsa** devrededir; telefon uygulamayı durdurursa, WebView'ı uyutursa veya zorla kapatılırsa çağrı alınamayabilir. Tamamen kapalı uygulamaya push çağrısı ve sunucu tarafı davet kuyruğu **yoktur**. Android 14+ foreground-service politikaları ve cihaz pil optimizasyonu nedeniyle kesintisiz çalışma taahhüt edilmez. Gerçek cihaz testi gereklidir.
+
 ## Gizlilik ve teknik sınırlar
 
 - PIN'den PBKDF2-SHA256 (310.000 tur) ile anahtar türetilir; rehber AES-256-GCM ile rastgele salt/IV kullanılarak cihazda şifrelenir. Anahtar kilitlemede bellekten bırakılır. PIN kurtarma servisi yoktur; PIN unutulursa uygulama verilerini temizlemek tüm kayıtları siler. PIN'e beş başarısız denemeden sonra bir dakika bekleme uygulanır. Bu cihaz içi sınır, cihazın sahibi tarafından depolamanın değiştirilmesine karşı sunucu koruması değildir.
 - Altı haneli görüşme kodu kimlik doğrulaması değildir. Kod eşleştirme karşılıklı kullanıcı onayı sağlar; kişi kimliğini kriptografik olarak doğrulamaz. Sonraki her çağrı alıcının cevaplamasını gerektirir. Kodu yalnızca güvendiğin kişiyle paylaş.
-- **İki uygulama ön planda açık olmalıdır.** Kamera ekranındaki kilitli alan, çağrı alma açıksa zil çalar; PIN ile girilmeden mikrofon açılmaz. Tamamen kapalı uygulamaya veya arka plana gelen arama bu sürümde desteklenmez. FCM/push, kalıcı arka plan çağrı servisi ve operatör araması yoktur. Normal çağrıya benzer zil, mevcut uygulama içi görüşme içindir.
+- Arka plan dinleme **ayrıca ve açıkça** etkinleştirildiyse uygulama işlemi çalışırken arka planda çağrıları dinlemeyi deneyebilir. Tamamen kapalı uygulamada çağrı garantisi veya FCM/push yoktur; süreç sonlanırsa sinyalleşme kaybolur. PIN kilidi atlanmaz. Normal çağrıya benzer zil mevcut uygulama içi görüşme içindir.
 - Mikrofon/kamera kullanımının Android göstergeleri sistemde görünür. Kamera yalnızca kamerayı açma eyleminde izin ister; açılışta mikrofon izni veya görüşme sunucusu bağlantısı kurulmaz.
 - PeerJS Cloud ile sinyalleşme, Google/Cloudflare STUN alternatifleri kullanılır. TURN aktarma sunucusu yoktur; simetrik NAT/kurumsal ağlarda bağlantı kurulamayabilir. Ağ kesintisinde sınırlı yeniden deneme, açık hata ve zaman aşımı uygulanır. Ücretli servis açılmamıştır.
 - Ses kaydı tutulmaz. Gürültü/yankı azaltma ve otomatik seviye dengelemesi cihazın WebRTC desteğine bağlıdır. Kod ve filtre tercihleri yerelde, rehber şifreli saklanır. Loglar kişi adlarını, kodları ve sesi içermez.
