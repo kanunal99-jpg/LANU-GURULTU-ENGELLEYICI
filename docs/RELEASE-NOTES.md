@@ -3,6 +3,7 @@
 - Ortadaki büyük objektif amblemi de giriş hareketine bağlandı; üstteki küçük amblem çalışmaya devam eder.
 - Her iki amblemde üç saniye basılı tutma PIN ekranını açar. PIN doğrulaması atlanmaz.
 - Android/WebView dokunma ve uyumluluk pointer olayları birbirinin sayacını bozmaz. Küçük parmak hareketi tolere edilir; kaydırma, gerçek iptal, çoklu dokunma ve arka plan hareketi güvenli biçimde iptal eder.
+- PIN ekranından vazgeçince klavye odağı bırakılır ve Android klavyesi kapatılır. Klavye odağı değişimi, parmağın kesintisiz tutuşunu iptal etmez.
 - Kilitleme sonrası kamera ekranı başa döner; ilk ekranda özel alana ilişkin yazı veya giriş ipucu yoktur.
 - Regresyon testleri ve gerçek Android Instrumentation MotionEvent ile iki amblemden giriş testleri eklendi. DOM-dispatched olaylar tek başına dokunma kanıtı sayılmaz.
 

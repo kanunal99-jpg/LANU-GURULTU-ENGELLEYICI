@@ -98,8 +98,12 @@
       $('gateStatus').textContent=e.message==='Wait'?'Çok fazla deneme. Bir dakika sonra tekrar dene.':mode==='unlock'?'PIN doğrulanamadı veya kayıt okunamadı.':'PIN kaydedilemedi. Cihaz depolamasını kontrol et.';
     }finally{if(token===gateEpoch)$('pinSubmit').disabled=false;}
   }
+  function dismissKeyboard() {
+    if(document.activeElement && typeof document.activeElement.blur==='function')document.activeElement.blur();
+    try{if(window.LanuAudio && typeof window.LanuAudio.hideKeyboard==='function')window.LanuAudio.hideKeyboard();}catch(_){}
+  }
   function lock(listen = true) {
-    gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
+    dismissKeyboard();gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
     if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
     $('privateView').hidden=$('gate').hidden=true;$('cameraView').hidden=false;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
@@ -163,7 +167,7 @@
     if(window.LanuAudio&&typeof window.LanuAudio.savePhoto==='function'){$('savePhoto').disabled=true;window.LanuAudio.savePhoto(photo);}
     else{const link=document.createElement('a');link.href=photo;link.download='Lanu-Lens-'+Date.now()+'.jpg';link.click();$('photoStatus').textContent='Fotoğraf indirme isteği gönderildi.';}
   });
-  $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
+  $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{dismissKeyboard();gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
   $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});

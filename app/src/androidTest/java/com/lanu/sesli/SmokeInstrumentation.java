@@ -81,10 +81,11 @@ public class SmokeInstrumentation extends Instrumentation {
     private void awaitTrue(WebView web,String expression,long duration,String label) throws Exception {
         long deadline=System.currentTimeMillis()+duration;
         while(System.currentTimeMillis()<deadline){if("true".equals(js(web,expression)))return;Thread.sleep(100);}
-        throw new AssertionError(label);
+        throw new AssertionError(label + " " + js(web,"JSON.stringify({trace:window.__entryTrace,gate:document.getElementById('gate').hidden,active:document.activeElement.id,viewport:[innerWidth,innerHeight],target:window.__entryTarget})"));
     }
     private void hold(WebView web,String id,long duration,boolean jitter) throws Exception {
         Thread.sleep(300); // Let the IME/viewport settle before calculating screen coordinates.
+        js(web,"window.__entryTrace=[];window.__entryTarget='"+id+"';if(!window.__entryRecording){window.__entryRecording=true;['pointerdown','pointermove','pointerup','pointercancel','touchstart','touchmove','touchend','touchcancel','blur','focus','contextmenu'].forEach(type=>document.addEventListener(type,e=>{if(window.__entryTrace)window.__entryTrace.push({type:e.type,target:e.target.id,pointer:e.pointerType,x:e.clientX,y:e.clientY,touches:e.touches?Array.from(e.touches,t=>[t.clientX,t.clientY]):null});},true));}");
         JSONArray bounds=new JSONArray(js(web,"(()=>{const r=document.getElementById('"+id+"').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2,innerWidth];})()"));
         final float[] point=new float[3];
         runOnMainSync(()->{
@@ -94,6 +95,16 @@ public class SmokeInstrumentation extends Instrumentation {
             point[1]=location[1]+web.getPaddingTop()+(float)bounds.optDouble(1)*scale;
             point[2]=scale;
         });
+        // Calibrate CSS-to-screen offsets using a real short touch. WebView
+        // padding/insets differ across Android versions and must not turn a
+        // correct gesture into a tap below the small header emblem.
+        long probe=SystemClock.uptimeMillis();
+        pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(50);
+        pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
+        JSONArray observed=new JSONArray(js(web,"(()=>{const t=window.__entryTrace.find(e=>e.type==='touchstart');return t&&t.touches?t.touches[0]:null;})()"));
+        point[0]+=(bounds.optDouble(0)-observed.optDouble(0))*point[2];
+        point[1]+=(bounds.optDouble(1)-observed.optDouble(1))*point[2];
+        js(web,"window.__entryTrace=[]");
         long down=SystemClock.uptimeMillis();
         pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
         if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}

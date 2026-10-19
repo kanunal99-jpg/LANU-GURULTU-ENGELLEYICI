@@ -50,7 +50,7 @@
       if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { prevent(event); begin('keyboard',0,0); }
     });
     on('keyup', event => { if (event.key === ' ' || event.key === 'Enter') cancel('keyboard'); });
-    on('blur', () => cancel());
+    on('blur', () => { if (press && press.source !== 'touch') cancel(); });
     return {cancel:() => cancel(), destroy() { cancel(); for (const [type,fn,config] of listeners) element.removeEventListener(type,fn,config); }};
   }
   root.LensEntry = {attach};

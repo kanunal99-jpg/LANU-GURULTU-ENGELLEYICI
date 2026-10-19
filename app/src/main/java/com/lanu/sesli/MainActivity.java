@@ -28,6 +28,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -178,6 +179,13 @@ public class MainActivity extends Activity {
     }
 
     private final class AudioBridge {
+        @JavascriptInterface public void hideKeyboard() {
+            main.post(() -> {
+                if (destroyed || web == null) return;
+                InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (keyboard != null) keyboard.hideSoftInputFromWindow(web.getWindowToken(), 0);
+            });
+        }
         @JavascriptInterface public void setRinging(boolean value) {
             main.post(() -> ring(value && visible && !destroyed));
         }
