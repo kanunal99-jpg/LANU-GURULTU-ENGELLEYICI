@@ -46,6 +46,7 @@ public class SmokeInstrumentation extends Instrumentation {
             require(web, "document.title === 'Lanu Lens' && document.getElementById('privateView').hidden", "Camera-only landing");
             require(web, "!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)", "No private hints in camera UI");
             require(web, "typeof window.LanuAudio.setRinging === 'function' && typeof window.LanuAudio.savePhoto === 'function'", "Ringtone and export bridges");
+            require(web, "typeof window.LanuAudio.setIncomingNotification === 'function' && typeof window.LanuAudio.requestCallNotificationPermission === 'function'", "Incoming call notification bridges");
             // Real OS touchscreen events, not DOM-dispatched PointerEvents.
             hold(web,"lensEmblem",180,false);
             Thread.sleep(3100);
@@ -54,16 +55,20 @@ public class SmokeInstrumentation extends Instrumentation {
             awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Center emblem opens PIN with real touch");
             require(web,"document.getElementById('privateView').hidden","Hold does not bypass PIN");
             js(web,"document.getElementById('cancelGate').click()");
-            hold(web,"lensLogo",3300,true);
-            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Header logo tolerates natural finger drift");
+            // Short moves near the top system gesture area can cause a real
+            // Android touchcancel. Verify the header without dragging.
+            hold(web,"lensLogo",3300,false);
+            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Header logo opens with a continuous hold");
             js(web,"document.getElementById('pin').value='741963';document.getElementById('pinConfirm').value='741963';document.getElementById('pinForm').dispatchEvent(new Event('submit',{cancelable:true}))");
             long unlockLimit=System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
             require(web,"!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)","No private hints after lock");
-            hold(web,"lensEmblem",3300,false);
-            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Center emblem still works after locking");
+            // Exercise natural finger drift on the centered target where it
+            // cannot be intercepted by Android's top-edge system gestures.
+            hold(web,"lensEmblem",3300,true);
+            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Center emblem tolerates finger drift after locking");
             require(web,"document.getElementById('pinConfirm').hidden && document.getElementById('privateView').hidden","Existing PIN is required after relock");
             js(web,"document.getElementById('cancelGate').click()");
             test.putString("stream", "Real Android center/header touch holds, short-touch rejection, finger drift, PIN vault, relock, camera privacy and lifecycle passed.\n");
