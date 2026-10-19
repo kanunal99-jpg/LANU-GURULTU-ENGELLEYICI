@@ -83,7 +83,7 @@
       if(until>Date.now()) throw Error('Wait');
       await writes;
       if(token!==gateEpoch)return;
-      const data=mode==='unlock'?await vault.unlock(pin):await vault.create(pin);
+      const data=mode==='unlock'?await vault.unlock(pin):await vault.create(pin,()=>token===gateEpoch&&!document.hidden);
       if(token!==gateEpoch){vault.lock();return;}
       try{storage().removeItem('lens-failures');storage().removeItem('lens-delay');}catch(_){}
       allowIncoming=data.incomingEnabled!==false;try{storage().setItem('lens-listen',String(allowIncoming));}catch(_){allowIncoming=false;}$('incomingEnabled').checked=allowIncoming;
