@@ -1,13 +1,13 @@
-# Lanu Lens 2.0.2 — kalıcı görüşme kodu
+# Lanu Lens 2.0.3 — Android gelen çağrı bildirimi (deneysel)
 
-- **Görüşme kodu artık bağlantı çakışması nedeniyle otomatik değiştirilmez.** Başka açık oturum kodu kullanıyorsa mevcut kod korunur; hata gösterilir ve diğer oturum kapatıldıktan sonra aynı kodla yeniden bağlanılabilir.
-- İlk açılışta oluşturulan kod, internet bağlantısı olmadan da yerel depolamaya kaydedilir.
-- Kullanıcı, yalnızca PIN ile açılan özel alanda Güvenlik bölümünden ve ikinci bir onay vererek görüşme kodunu değiştirebilir.
-- Yeni kod kaydedilemezse eskisi korunur. Aktif görüşme sürerken veya alan kilitliyken kod değişimine izin verilmez.
-- PIN, kamera giriş hareketi, rehber ve çağrı zili bir önceki sürümden korunmuştur.
-- Kod değişimi diğer kullanıcıların rehberlerini otomatik güncellemez; yeni kod karşı tarafla paylaşılmalıdır. Altı haneli kod, uçtan uca kimlik doğrulaması değildir.
-- İlk kamera ekranında gizli alana ilişkin açıklama veya düğme yer almaz.
+- Gelen çağrı sırasında yerel Android yüksek öncelikli bildirim, sistem zil sesi ve titreşim kullanılır. Bildirime dokunulduğunda PIN ekranı açılır; kilit atlanmaz.
+- Android 13+ bildirim izni, özel alanda açıkça istenebilir. İzin verilmezse arka plan dinleme devreye girmez.
+- Özel alan ayarında **Arka planda çağrı dinle** seçeneği eklendi. Kullanıcı açtığında ekranda sürekli ve gizli içerikli Android foreground-service bildirimi gösterilir.
+- Kullanıcı dinlemeyi seçerse uygulama arka plana geçtiğinde özel alan kilitlenir, etkin görüşme/mikrofon kapanır; uygulama işlemi ve WebView ayakta olduğu müddetçe yeni PeerJS çağrı teklifleri için sinyalleşme açık tutulmaya çalışılır.
+- Bildirimlerde görüşme kodu, kişi adı veya özel alan bilgisi gösterilmez; Android kilit ekranında içerik saklanır.
+- Uygulama tamamen kapatılırsa, işletim sistemi WebView'ı durdurursa, uygulama force-stop edilirse veya ağ koparsa **çağrı teslimi garanti değildir**. Bu sürüm FCM/push veya sunucudan yeniden çağrı kurma içermez.
+- Kalıcı 6 haneli kod, PIN ve şifreli rehber gibi önceki güvenlik önlemleri korunur.
 
-Bu bir **debug imzalı test APK'sıdır**. Eski test APK'sının imzası farklı olabilir. APK kurmak için mevcut uygulamayı kaldırmak yerel PIN/rehber/kod verilerinin kaybına yol açabilir; önemli veriler varsa kaldırmadan önce bu sınır değerlendirilmelidir.
+**Sınır:** Bu, gerçek WhatsApp benzeri her koşulda çalışan kapalı-uygulama çağrısı değildir. Bunun için FCM/push ve güvenilir sunucu tarafı davet/oturum yönetimi gerekir. Ücretli altyapı kurulmadı.
 
-Uygulama kapalı/arka plandayken çağrı alma, TURN sunucusu ve gerçek iki fiziksel telefonla farklı ağlarda mikrofon, hoparlör, Bluetooth testleri bu sürümün doğrulanmış özellikleri değildir.
+Debug test APK'sıdır. Önceki CI imzası farklıysa eski kurulumu silmek yerel PIN/rehber/kod verilerinin kaybına yol açabilir. İki fiziksel Android cihazda gerçek gelen çağrı, pil optimizasyonu, Bluetooth, ekran kilidi ve farklı ağlar henüz doğrulanmamıştır.
