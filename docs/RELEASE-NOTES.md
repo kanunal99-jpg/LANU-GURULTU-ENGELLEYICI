@@ -1,10 +1,13 @@
-# Lanu Lens 2.0.1 — gizli giriş düzeltmesi
+# Lanu Lens 2.0.2 — kalıcı görüşme kodu
 
-- Ortadaki büyük objektif amblemi de giriş hareketine bağlandı; üstteki küçük amblem çalışmaya devam eder.
-- Her iki amblemde üç saniye basılı tutma PIN ekranını açar. PIN doğrulaması atlanmaz.
-- Android/WebView dokunma ve uyumluluk pointer olayları birbirinin sayacını bozmaz. Küçük parmak hareketi tolere edilir; kaydırma, gerçek iptal, çoklu dokunma ve arka plan hareketi güvenli biçimde iptal eder.
-- PIN ekranından vazgeçince klavye odağı bırakılır ve Android klavyesi kapatılır. Klavye odağı değişimi, parmağın kesintisiz tutuşunu iptal etmez.
-- Kilitleme sonrası kamera ekranı başa döner; ilk ekranda özel alana ilişkin yazı veya giriş ipucu yoktur.
-- Regresyon testleri ve gerçek Android Instrumentation MotionEvent ile iki amblemden giriş testleri eklendi. DOM-dispatched olaylar tek başına dokunma kanıtı sayılmaz.
+- **Görüşme kodu artık bağlantı çakışması nedeniyle otomatik değiştirilmez.** Başka açık oturum kodu kullanıyorsa mevcut kod korunur; hata gösterilir ve diğer oturum kapatıldıktan sonra aynı kodla yeniden bağlanılabilir.
+- İlk açılışta oluşturulan kod, internet bağlantısı olmadan da yerel depolamaya kaydedilir.
+- Kullanıcı, yalnızca PIN ile açılan özel alanda Güvenlik bölümünden ve ikinci bir onay vererek görüşme kodunu değiştirebilir.
+- Yeni kod kaydedilemezse eskisi korunur. Aktif görüşme sürerken veya alan kilitliyken kod değişimine izin verilmez.
+- PIN, kamera giriş hareketi, rehber ve çağrı zili bir önceki sürümden korunmuştur.
+- Kod değişimi diğer kullanıcıların rehberlerini otomatik güncellemez; yeni kod karşı tarafla paylaşılmalıdır. Altı haneli kod, uçtan uca kimlik doğrulaması değildir.
+- İlk kamera ekranında gizli alana ilişkin açıklama veya düğme yer almaz.
 
-Debug imzalı test APK'sıdır. Önceki CI imzası farklıysa Android mevcut kurulumun üzerine yüklemeyi reddedebilir. Kaldırmak yerel PIN/rehber/kod verilerini siler; veriler önemliyse eski kurulumu kaldırmadan önce bu sınır değerlendirilmelidir. Fiziksel telefonda giriş/zil/ses testi ayrıca gereklidir. Arka plan/kapalı uygulamaya çağrı ve TURN aktarma bu sürüme eklenmemiştir.
+Bu bir **debug imzalı test APK'sıdır**. Eski test APK'sının imzası farklı olabilir. APK kurmak için mevcut uygulamayı kaldırmak yerel PIN/rehber/kod verilerinin kaybına yol açabilir; önemli veriler varsa kaldırmadan önce bu sınır değerlendirilmelidir.
+
+Uygulama kapalı/arka plandayken çağrı alma, TURN sunucusu ve gerçek iki fiziksel telefonla farklı ağlarda mikrofon, hoparlör, Bluetooth testleri bu sürümün doğrulanmış özellikleri değildir.
