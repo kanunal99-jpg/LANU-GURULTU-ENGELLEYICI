@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.2.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.3.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -13,6 +13,12 @@ Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda fl
 Gelen görüşme, uygulama açıkken özel alan veya kamera ekranında sistem zil sesi ve titreşimle haber verir. Sessiz/titreşim modu korunur. Cevapla, reddet, karşı tarafın kapatması, ağ kaybı ve 45 saniye zaman aşımında zil durur. Arayan taraf, alıcıya ulaşıldığında çalma tonu duyar. Mikrofon yalnızca arayan aramayı başlatınca ve alıcı Cevapla seçince açılır. Gelen çağrı kameraya veya ilk ekrana kişi/kod taşımaz. Kamera ekranında çalan çağrıyı cevaplamak için PIN ile giriş gerekir. Bu alma seçeneği özel alandaki ayardan kapatılabilir.
 
 Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve arka plana geçiş özel alanı kilitler. Görüşme biter, mikrofon/kamera bırakılır. Kamera ekranında çağrı alma açıksa yalnızca uygulama ön plandayken sinyalleşme sürer; arka planda tamamen bırakılır. Android ekran görüntüsü/son uygulamalar önizlemesi FLAG_SECURE ile korunur. Kullanıcı fotoğrafları yalnızca Kaydet seçildiğinde sistem dosya seçicisiyle dışarı aktarılır.
+
+## Android çağrı bildirimi (2.0.3)
+
+Uygulama **ön planda açık** ve gelen arama için sinyalleşme etkin olduğunda Android bildirim alanında anonim, kilit ekranında gizli gelen çağrı bildirimi gösterilir. Bildirimi açmak PIN kontrolünü atlamaz. Android 13+ cihazda **özel alan → Çağrı bildirimi izni ver** adımından bildirim iznini kullanıcı onaylamalıdır. İzin reddedilirse uygulama içi zil, titreşim ve PIN ile cevaplama akışı korunur.
+
+**Henüz arka planda veya tamamen kapalı uygulamaya çağrı bildirimi ulaştırılamaz.** Bu, ayrı bir sunucu tarafı push ve çağrı teslim altyapısı gerektirir. Sadece bildirim oluşturulmuş olması arka plan çağrı alımının çalıştığı anlamına gelmez.
 
 ## Kalıcı görüşme kodu (2.0.2)
 
