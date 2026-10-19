@@ -491,7 +491,13 @@
     endCall('Görüşme kapatıldı.');
     if (peer) peer.destroy();
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.'); else window.lanuResume(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (window.LanuLens && window.LanuLens.canReceive() && state === 'idle')
+        window.lanuResume(); // Opt-in foreground service keeps idle signaling, not microphone.
+      else window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.');
+    } else window.lanuResume();
+  });
   const storedId = safeGet('lanuId');
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
   if (!/^[1-9]\d{5}$/.test(storedId || '')) safeSet('lanuId', myId);
