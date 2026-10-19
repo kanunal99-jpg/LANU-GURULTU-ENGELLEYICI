@@ -582,3 +582,39 @@ test('camera standby rings with PIN locked but cannot answer or capture audio be
  assert.equal(h.ringing.at(-1),true);assert.equal(h.requested(),0);h.click('answerBtn');assert.equal(h.requested(),0);assert.equal(call.answered,0);
  h.context.LanuCalls.deactivate(false);assert.equal(h.ringing.at(-1),false);assert.equal(h.peers[0].destroyed,true);
 });
+
+test('opt-in background listener retains only idle signaling and rings on an incoming call', () => {
+  const h = harness({lens:true, lensListen:true, lensOpen:false}); h.open();
+  h.context.document.hidden=true;
+  h.events['document:visibilitychange']();
+  assert.equal(h.peers.length,1);
+  assert.equal(h.peers[0].destroyed,false);
+  const incoming = new h.Connection();
+  h.peers[0].emit('call', incoming);
+  assert.equal(h.ringing.at(-1), true);
+  assert.equal(h.requested(),0, 'microphone must remain closed until PIN unlock');
+  h.click('answerBtn');
+  assert.equal(h.requested(),0, 'locked background answer cannot open microphone');
+  h.click('hangBtn');
+  assert.equal(h.ringing.at(-1),false);
+});
+
+test('without opt-in the same background transition stops signaling and denies ringing', () => {
+  const h = harness({lens:true,lensListen:false,lensOpen:false}); h.open();
+  h.context.document.hidden=true;
+  h.events['document:visibilitychange']();
+  assert.equal(h.get('callBtn').disabled,true);
+  const incoming = new h.Connection();
+  h.peers[0].emit('call',incoming);
+  assert.equal(incoming.closed>0,true);
+  assert.equal(h.requested(),0);
+});
+
+test('active calls always release their microphone on background, even with listener enabled',async()=>{
+  const h = harness({lens:true,lensListen:true,lensOpen:true}); h.open();
+  h.get('partner').value='654321';h.click('callBtn');h.resolve();await h.flush();
+  h.context.document.hidden=true;
+  h.events['document:visibilitychange']();
+  assert.equal(h.track.stopped,1);
+  assert.equal(h.get('callBtn').disabled,true);
+});
