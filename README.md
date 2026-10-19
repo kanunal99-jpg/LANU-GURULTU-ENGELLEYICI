@@ -2,11 +2,11 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.0.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.1.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
-İlk ekran yalnızca kamera özelliklerini gösterir. Özel alanın adı, rehber, görüşme kodu, giriş ipucu veya arama düğmesi bu ekranda gösterilmez. Objektif logosuna üç saniye basılı tutunca PIN ekranı açılır. İlk kullanımda kişisel 6–12 haneli PIN oluşturulur. Hazır/sabit PIN yoktur. Sonraki girişler aynı PIN ile yapılır. Parmak izi bu sürümde eklenmemiştir.
+İlk ekran yalnızca kamera özelliklerini gösterir. Özel alanın adı, rehber, görüşme kodu, giriş ipucu veya arama düğmesi bu ekranda gösterilmez. Üstteki küçük veya ortadaki büyük objektif amblemine üç saniye basılı tutunca PIN ekranı açılır. İlk kullanımda kişisel 6–12 haneli PIN oluşturulur. Hazır/sabit PIN yoktur. Sonraki girişler aynı PIN ile yapılır. Parmak izi bu sürümde eklenmemiştir.
 
 Özel alanda iki kullanıcı görüşme kodlarını paylaşır. Kod eşleştirme isteğini karşı taraf açıkça onaylar. Uygulama içi rehber varsayılan olarak kapalıdır; her kullanıcı kendisi açabilir. Açıkken onaylanan eşleşmeler takma adla saklanır; kaydedilmiş kişinin Ara düğmesi kodu yeniden yazmadan arar. Kapalıyken kodla tek görüşme yapılabilir. Rehberi kapatmak mevcut şifreli kayıtları silmez; kişi satırındaki Sil düğmesi siler. Telefon rehberine erişim izni istenmez.
 
@@ -37,3 +37,9 @@ sh gradlew connectedDebugAndroidTest
 ```
 
 GitHub Actions testleri, yerel PeerJS bütünlüğünü, iki Chrome oturumunda gerçek WebRTC/RTP akışını, kamera/PIN/rehber/görünürlük akışını, Android derlemesini, lint ve API 35 WebView smoke testini doğrular. Ana dalda tüm adımlar başarılı olursa imzası doğrulanmış APK, SHA-256 ve APK bilgileri otomatik Releases'a eklenir. Gerçek iki Android telefonda işitilen zil, farklı ağlarda ses kalitesi, Bluetooth ve fiziksel kamera/flâş ayrıca cihaz testi gerektirir; emülatör bunları kanıtlamaz.
+
+## 2.0.1 giriş düzeltmesi
+
+Önceki sürümde ortadaki büyük amblem girişe bağlanmamıştı. Her iki amblem artık aynı üç saniyelik tutma hareketini destekler. Touch Events ve mouse/klavye olayları ayrı işlenir; WebView uyumluluk pointercancel/pointerleave olayları kesilmemiş bir parmak basışının sayacını bozmaz. Gerçek touchcancel, kaydırma, çoklu dokunma ve arka plan olayı hareketi iptal eder. İlk ekrana gizli alanı anlatan yazı eklenmemiştir.
+
+Android smoke testi artık DOM'a PointerEvent göndermek yerine Instrumentation üzerinden gerçek işletim sistemi touchscreen MotionEvent girişleri kullanır: kısa dokunuş, ortadaki amblem, üstteki amblem, küçük parmak hareketi ve kilitlemeden sonra yeniden giriş doğrulanır. Chrome testi de CDP touchscreen girişleri kullanır. Bu testler fiziksel Samsung cihazının birebir doğrulaması olarak sunulmaz.

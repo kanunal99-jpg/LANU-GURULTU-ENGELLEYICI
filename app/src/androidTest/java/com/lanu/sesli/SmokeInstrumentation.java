@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.view.MotionEvent;
+import android.view.InputDevice;
+import org.json.JSONArray;
 import android.view.ViewGroup;
 import android.webkit.WebView;
 import java.util.concurrent.CountDownLatch;
@@ -42,17 +46,27 @@ public class SmokeInstrumentation extends Instrumentation {
             require(web, "document.title === 'Lanu Lens' && document.getElementById('privateView').hidden", "Camera-only landing");
             require(web, "!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)", "No private hints in camera UI");
             require(web, "typeof window.LanuAudio.setRinging === 'function' && typeof window.LanuAudio.savePhoto === 'function'", "Ringtone and export bridges");
-            js(web, "document.getElementById('lensLogo').dispatchEvent(new PointerEvent('pointerdown'))");
-            long gateLimit=System.currentTimeMillis()+6000;
-            while(System.currentTimeMillis()<gateLimit && !"true".equals(js(web,"!document.getElementById('gate').hidden")))Thread.sleep(100);
-            require(web,"!document.getElementById('gate').hidden","Three-second entry gesture");
+            // Real OS touchscreen events, not DOM-dispatched PointerEvents.
+            hold(web,"lensEmblem",180,false);
+            Thread.sleep(3100);
+            require(web,"document.getElementById('gate').hidden","Short center-logo touch stays in camera");
+            hold(web,"lensEmblem",3300,false);
+            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Center emblem opens PIN with real touch");
+            require(web,"document.getElementById('privateView').hidden","Hold does not bypass PIN");
+            js(web,"document.getElementById('cancelGate').click()");
+            hold(web,"lensLogo",3300,true);
+            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Header logo tolerates natural finger drift");
             js(web,"document.getElementById('pin').value='741963';document.getElementById('pinConfirm').value='741963';document.getElementById('pinForm').dispatchEvent(new Event('submit',{cancelable:true}))");
             long unlockLimit=System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
             require(web,"!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)","No private hints after lock");
-            test.putString("stream", "Secure assets, camera landing, long press, PIN vault, private locking, native ringtone/export bridges and lifecycle passed.\n");
+            hold(web,"lensEmblem",3300,false);
+            awaitTrue(web,"!document.getElementById('gate').hidden",6000,"Center emblem still works after locking");
+            require(web,"document.getElementById('pinConfirm').hidden && document.getElementById('privateView').hidden","Existing PIN is required after relock");
+            js(web,"document.getElementById('cancelGate').click()");
+            test.putString("stream", "Real Android center/header touch holds, short-touch rejection, finger drift, PIN vault, relock, camera privacy and lifecycle passed.\n");
             sendStatus(0, test);
             Bundle result = new Bundle(); result.putString("stream", "OK (1 test)\n");
             finish(Activity.RESULT_OK, result);
@@ -63,6 +77,34 @@ public class SmokeInstrumentation extends Instrumentation {
         } finally {
             if (activity != null) { final Activity target = activity; runOnMainSync(target::finish); }
         }
+    }
+    private void awaitTrue(WebView web,String expression,long duration,String label) throws Exception {
+        long deadline=System.currentTimeMillis()+duration;
+        while(System.currentTimeMillis()<deadline){if("true".equals(js(web,expression)))return;Thread.sleep(100);}
+        throw new AssertionError(label);
+    }
+    private void hold(WebView web,String id,long duration,boolean jitter) throws Exception {
+        Thread.sleep(300); // Let the IME/viewport settle before calculating screen coordinates.
+        JSONArray bounds=new JSONArray(js(web,"(()=>{const r=document.getElementById('"+id+"').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2,innerWidth];})()"));
+        final float[] point=new float[3];
+        runOnMainSync(()->{
+            int[] location=new int[2];web.getLocationOnScreen(location);
+            float scale=(web.getWidth()-web.getPaddingLeft()-web.getPaddingRight())/(float)bounds.optDouble(2);
+            point[0]=location[0]+web.getPaddingLeft()+(float)bounds.optDouble(0)*scale;
+            point[1]=location[1]+web.getPaddingTop()+(float)bounds.optDouble(1)*scale;
+            point[2]=scale;
+        });
+        long down=SystemClock.uptimeMillis();
+        pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
+        if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}
+        else SystemClock.sleep(duration);
+        pointer(down,MotionEvent.ACTION_UP,point[0],point[1]);
+        waitForIdleSync();
+    }
+    private void pointer(long down,int action,float x,float y) {
+        MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
+        event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        try{sendPointerSync(event);}finally{event.recycle();}
     }
     private String js(WebView view, String expression) throws Exception {
         CountDownLatch done = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();

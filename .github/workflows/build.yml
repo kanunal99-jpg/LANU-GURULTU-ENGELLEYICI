@@ -70,12 +70,12 @@ jobs:
       - name: APK imzası ve içerik doğrulaması
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.0.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.0.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.0.apk > dist/APK-BILGILERI.txt
-          unzip -l dist/Lanu-Lens-2.0.0.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
+          cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.1.apk > dist/APK-BILGILERI.txt
+          unzip -l dist/Lanu-Lens-2.0.1.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
           cd dist
-          sha256sum Lanu-Lens-2.0.0.apk > SHA256SUMS.txt
+          sha256sum Lanu-Lens-2.0.1.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -91,6 +91,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v2.0.0-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.0.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
+          gh release create "v2.0.1-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.1.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Lanu Lens 2.0.0" --notes-file docs/RELEASE-NOTES.md
+            --title "Lanu Lens 2.0.1" --notes-file docs/RELEASE-NOTES.md

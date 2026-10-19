@@ -1,10 +1,9 @@
-# Lanu Lens 2.0.0
+# Lanu Lens 2.0.1 — gizli giriş düzeltmesi
 
-- Uygulama adı ve simgesi Lanu Lens olarak yenilendi.
-- Gerçek kamera: ön/arka kamera, desteklenen flaş, 3/10 saniye zamanlayıcı, ızgara, 1–3× dijital yakınlaştırma, JPEG çekim ve kullanıcı seçimiyle kayıt.
-- İlk ekranda özel alana ilişkin yazı, düğme veya giriş ipucu yok. Objektife üç saniye basma ve kişisel PIN ile giriş.
-- AES-GCM şifreli, isteğe bağlı uygulama içi rehber; karşılıklı kod eşleştirme isteği ve onayı; kişiden doğrudan arama/silme.
-- Uygulama ön plandayken özel alanda veya kamera ekranında gelen çağrıya sistem zil sesi/titreşim, arayana çalma tonu. Cevap/reddet/iptal/ağ kaybı/zaman aşımında temizlik.
-- Kilitleme, arka plan, geri tuşu ve hareketsizlikte özel alanı koruma. Kamera ve çağrı medyası ayrı tutulur; kilitte kaynaklar serbest bırakılır.
+- Ortadaki büyük objektif amblemi de giriş hareketine bağlandı; üstteki küçük amblem çalışmaya devam eder.
+- Her iki amblemde üç saniye basılı tutma PIN ekranını açar. PIN doğrulaması atlanmaz.
+- Android/WebView dokunma ve uyumluluk pointer olayları birbirinin sayacını bozmaz. Küçük parmak hareketi tolere edilir; kaydırma, gerçek iptal, çoklu dokunma ve arka plan hareketi güvenli biçimde iptal eder.
+- Kilitleme sonrası kamera ekranı başa döner; ilk ekranda özel alana ilişkin yazı veya giriş ipucu yoktur.
+- Regresyon testleri ve gerçek Android Instrumentation MotionEvent ile iki amblemden giriş testleri eklendi. DOM-dispatched olaylar tek başına dokunma kanıtı sayılmaz.
 
-İki cihazın uygulaması ön planda açık olmalıdır; kamera ekranında gelen çağrı PIN ile girişten sonra cevaplanır. Kapalı veya arka plandaki uygulamaya arama bildirimi yoktur. TURN yok; her ağda bağlantı garantisi yoktur. Debug test APK'sıdır. Kamera/mikrofon sistem göstergeleri görünür. Gerçek iki telefonda işitme, Bluetooth ve fiziksel kamera testleri ayrıca yapılmalıdır. Testlerin ayrıntılı kanıtı Actions kaydındadır; derleme tek başına gerçek cihaz doğrulaması değildir.
+Debug imzalı test APK'sıdır. Önceki CI imzası farklıysa Android mevcut kurulumun üzerine yüklemeyi reddedebilir. Kaldırmak yerel PIN/rehber/kod verilerini siler; veriler önemliyse eski kurulumu kaldırmadan önce bu sınır değerlendirilmelidir. Fiziksel telefonda giriş/zil/ses testi ayrıca gereklidir. Arka plan/kapalı uygulamaya çağrı ve TURN aktarma bu sürüme eklenmemiştir.

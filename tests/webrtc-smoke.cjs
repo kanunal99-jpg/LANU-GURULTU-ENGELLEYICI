@@ -53,7 +53,7 @@ ws.on('connection', (socket, request) => {
   const browser = await chromium.launch({executablePath: process.env.LANU_CHROME_EXECUTABLE || undefined, headless:true,
     args:['--no-sandbox', '--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']});
   try {
-    const contexts = await Promise.all([browser.newContext({viewport:{width:390,height:844}}), browser.newContext({viewport:{width:390,height:844}})]);
+    const contexts = await Promise.all([browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}), browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true})]);
     const [a,b] = await Promise.all(contexts.map(c=>c.newPage()));
     const errors=[];
     for(const page of [a,b]) page.on('pageerror',e=>errors.push(String(e)));
@@ -72,9 +72,13 @@ ws.on('connection', (socket, request) => {
     assert.match(await a.locator('#photoPreview').getAttribute('src'),/^data:image\/jpeg;base64,/);
     await a.locator('#closePhoto').click();
     async function unlock(page,first=true) {
-      await page.locator('#lensLogo').dispatchEvent('pointerdown');
+      const target=first?'#lensEmblem':'#lensLogo';
+      const box=await page.locator(target).boundingBox();
+      const touch=await page.context().newCDPSession(page);
+      await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2,id:1}]});
       await page.locator('#gate').waitFor({state:'visible'});
-      await page.locator('#lensLogo').dispatchEvent('pointerup');
+      await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await touch.detach();
       await page.locator('#pin').fill('741963');
       if(first) await page.locator('#pinConfirm').fill('741963');
       await page.locator('#pinSubmit').click();

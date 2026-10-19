@@ -1,7 +1,8 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  let vault, opened = false, mode = 'unlock', gateEpoch = 0, hold, idle;
+  let vault, opened = false, mode = 'unlock', gateEpoch = 0, idle;
+  let entries = [];
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
   let incomingPair = null, writes = Promise.resolve(), lastCallState = 'idle';
   const message = text => { $('cameraStatus').textContent = text; };
@@ -103,7 +104,7 @@
     $('privateView').hidden=$('gate').hidden=true;$('cameraView').hidden=false;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
-    stopCamera();message('Fotoğraf çekmek için kamerayı aç.');
+    stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
   }
   function persist(update) {
     const scheduledEpoch=gateEpoch;
@@ -145,13 +146,11 @@
   };
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
   window.lanuForeground=()=>{suspended=false;};
-  window.lanuBackground=()=>{suspended=true;lock(false);};
+  window.lanuBackground=()=>{entries.forEach(entry=>entry.cancel());suspended=true;lock(false);};
   window.lanuBack=()=>{if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
-  $('lensLogo').addEventListener('pointerdown',()=>{clearTimeout(hold);hold=setTimeout(()=>gate(),3000);});
-  ['pointerup','pointercancel','pointerleave'].forEach(e=>$('lensLogo').addEventListener(e,()=>clearTimeout(hold)));
-  $('lensLogo').addEventListener('contextmenu',e=>e.preventDefault());
-  $('lensLogo').addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();hold=setTimeout(()=>gate(),3000);}});
-  $('lensLogo').addEventListener('keyup',()=>clearTimeout(hold));
+  entries = Array.from(document.querySelectorAll('[data-lens-entry]')).map(element => LensEntry.attach(element, () => gate(), {
+    enabled: () => !$('cameraView').hidden && $('gate').hidden && $('photoView').hidden && !document.hidden
+  }));
   $('startCamera').addEventListener('click',startCamera);$('shutter').addEventListener('click',shutter);
   $('switchCamera').addEventListener('click',()=>{facing=facing==='environment'?'user':'environment';startCamera();});
   $('gridBtn').addEventListener('click',()=>{$('cameraGrid').hidden=!$('cameraGrid').hidden;$('gridBtn').setAttribute('aria-pressed',String(!$('cameraGrid').hidden));});
@@ -172,5 +171,5 @@
   $('pairAccept').addEventListener('click',()=>{if(!incomingPair)return;const req=incomingPair;incomingPair=null;$('pairRequest').hidden=true;req.respond(true);if($('saveIncoming').checked)paired(req.code);});
   $('pairReject').addEventListener('click',()=>{if(incomingPair)incomingPair.respond(false);incomingPair=null;$('pairRequest').hidden=true;});
   document.addEventListener('pointerdown',touch);document.addEventListener('keydown',touch);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(hold);window.lanuBackground();}else window.lanuForeground();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){window.lanuBackground();}else window.lanuForeground();});
 })();

@@ -5,12 +5,12 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#101217"><title>Lanu Lens</title>
   <link rel="icon" href="lens.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
-  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
+  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
 </head>
 <body>
   <main id="cameraView" class="camera-shell">
-    <header class="camera-header"><button id="lensLogo" class="brand" aria-label="Lanu Lens"><img src="lens.svg" alt="" width="36" height="36"><span>LANU <b>LENS</b></span></button><span class="eyebrow">FOTOĞRAF</span></header>
-    <div class="viewfinder"><video id="preview" autoplay muted playsinline></video><div id="cameraGrid" hidden></div><div id="cameraEmpty"><img src="lens.svg" width="88" height="88" alt=""><h1>Anı yakala.</h1><p>Işığı bul, kadrajını oluştur.</p><button id="startCamera">Kamerayı aç</button></div><span id="countdown" hidden></span></div>
+    <header class="camera-header"><button id="lensLogo" class="brand" data-lens-entry aria-label="Lanu Lens"><img src="lens.svg" alt="" width="36" height="36" draggable="false"><span>LANU <b>LENS</b></span></button><span class="eyebrow">FOTOĞRAF</span></header>
+    <div class="viewfinder"><video id="preview" autoplay muted playsinline></video><div id="cameraGrid" hidden></div><div id="cameraEmpty"><button id="lensEmblem" class="lens-emblem" data-lens-entry aria-label="Lanu Lens"><img src="lens.svg" width="88" height="88" alt="" draggable="false"></button><h1>Anı yakala.</h1><p>Işığı bul, kadrajını oluştur.</p><button id="startCamera">Kamerayı aç</button></div><span id="countdown" hidden></span></div>
     <p id="cameraStatus" class="camera-status" role="status">Fotoğraf çekmek için kamerayı aç.</p>
     <div class="camera-options"><button id="flashBtn" class="tool" aria-pressed="false" disabled>Flaş kapalı</button><button id="timerBtn" class="tool">Süre kapalı</button><button id="gridBtn" class="tool" aria-pressed="false">Izgara</button></div>
     <label class="zoom-control" for="zoom">Yakınlaştırma <input id="zoom" type="range" min="1" max="3" step="0.1" value="1" disabled><span id="zoomValue">1×</span></label>

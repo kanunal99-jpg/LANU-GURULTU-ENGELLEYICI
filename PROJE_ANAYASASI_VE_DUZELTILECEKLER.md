@@ -68,3 +68,8 @@ Tek kulak kullanımını, WebRTC akışını, mikrofon izinlerini ve Android pla
 ## 2026-10-18 — Lanu Lens
 
 İlk kamera ekranında özel görüşme/rehber/kod alanına ait hiçbir metin veya giriş ipucu gösterilmez. Kamera gerçek ve kullanılabilir olmalıdır. Özel alana kullanıcı seçimiyle uzun basma ve kişisel PIN ile girilir. Rehber isteğe bağlı ve cihazda şifrelidir; telefon rehberi okunmaz. Gelen arama zilinin başlayıp tüm bitiş yollarında durması doğrulanır. Arka plan/kapalı uygulamaya arama desteği, push altyapısı olmadığı sürece varmış gibi sunulmaz. Kamera ve mikrofon kilitte bırakılır; kamera ekranında çağrı alma açıksa sinyalleşme yalnızca ön planda sürer, arka planda bırakılır; özel veriler loglanmaz. APK her başarılı ana dal sürümünde Releases'a yüklenir.
+
+
+## 2026-10-19 — giriş hatasının kök nedeni ve düzeltmesi
+
+Kamera ekranında iki objektif amblemi olmasına rağmen yalnızca üstteki küçük ambleme giriş olayı bağlanmıştı. Ortadaki büyük amblem boşta kalıyordu. Ayrıca yalnızca sentetik DOM PointerEvent ile yapılan test gerçek Android dokunma iptallerini sınamıyordu. Her iki amblem aynı giriş bileşenine bağlandı; dokunma ve pointer uyumluluk olayları ayrıldı. Android testleri gerçek işletim sistemi MotionEvent dokunuşlarıyla yapılır. Kısa dokunuş/çoklu dokunma/kaydırma/arka plan gizli alanı açmamalıdır; PIN koruması korunur. İlk ekrana giriş açıklaması eklenmez.
