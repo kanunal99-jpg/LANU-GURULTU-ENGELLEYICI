@@ -1,13 +1,10 @@
-# Lanu Lens 2.0.2 — kalıcı görüşme kodu
+# Lanu Lens 2.0.3 — güvenli gelen çağrı bildirimi (ilk aşama)
 
-- **Görüşme kodu artık bağlantı çakışması nedeniyle otomatik değiştirilmez.** Başka açık oturum kodu kullanıyorsa mevcut kod korunur; hata gösterilir ve diğer oturum kapatıldıktan sonra aynı kodla yeniden bağlanılabilir.
-- İlk açılışta oluşturulan kod, internet bağlantısı olmadan da yerel depolamaya kaydedilir.
-- Kullanıcı, yalnızca PIN ile açılan özel alanda Güvenlik bölümünden ve ikinci bir onay vererek görüşme kodunu değiştirebilir.
-- Yeni kod kaydedilemezse eskisi korunur. Aktif görüşme sürerken veya alan kilitliyken kod değişimine izin verilmez.
-- PIN, kamera giriş hareketi, rehber ve çağrı zili bir önceki sürümden korunmuştur.
-- Kod değişimi diğer kullanıcıların rehberlerini otomatik güncellemez; yeni kod karşı tarafla paylaşılmalıdır. Altı haneli kod, uçtan uca kimlik doğrulaması değildir.
-- İlk kamera ekranında gizli alana ilişkin açıklama veya düğme yer almaz.
+- **Uygulama açıkken** gelen WebRTC görüşmelerinde Android sistem bildirimi eklenmiştir. Dokunmak uygulamayı açar, PIN kilidini atlamaz; mikrofonu açmaz veya çağrıyı otomatik cevaplamaz.
+- Bildirim başlığında yalnızca **Lanu Lens**, açıklamada nötr **Yeni etkinlik var. Açmak için dokun.** ifadesi görünür. Görüşme kodu, kişi adı veya gizli alana ilişkin ipucu gösterilmez.
+- Bildirim Android kilit ekranında `VISIBILITY_SECRET` ile gizlenir. Android 13+ için bildirim izni, yalnızca özel alanın ayarlarından kullanıcı isteğiyle alınır.
+- Mevcut zil/titreşim işlevi korunmuştur; bildirim kanalında ikinci kez ses çalınmaz. Ret, yanıt, çağrı iptali, zaman aşımı veya arka plana geçişte bildirim temizlenir.
+- **Önemli:** Uygulama kapalıyken/arka plandayken bağımsız çağrı alımı henüz desteklenmez. Bunun için yetkili kimlik/kod eşleştirmesi olan arka uç + FCM yüksek öncelikli push + Android çağrı teslim/zaman aşımı akışı gereklidir. Sadece bildirim ekranı ekleyerek arka planda arama geliyormuş gibi davranılmaz.
+- Kişisel PIN, AES-GCM rehber, kalıcı kullanıcı kodu, kamera ve WebRTC ses akışı davranışı korunmuştur.
 
-Bu bir **debug imzalı test APK'sıdır**. Eski test APK'sının imzası farklı olabilir. APK kurmak için mevcut uygulamayı kaldırmak yerel PIN/rehber/kod verilerinin kaybına yol açabilir; önemli veriler varsa kaldırmadan önce bu sınır değerlendirilmelidir.
-
-Uygulama kapalı/arka plandayken çağrı alma, TURN sunucusu ve gerçek iki fiziksel telefonla farklı ağlarda mikrofon, hoparlör, Bluetooth testleri bu sürümün doğrulanmış özellikleri değildir.
+Debug imzalı test APK'sıdır. Önceki debug sürümüyle imza uyuşmazlığı yerel verilerin kaybı olmadan güncellemeyi engelleyebilir. Gerçek iki Android cihazda bildirim, zil, ağ geçişi ve Bluetooth testleri ayrıca yapılmalıdır.
