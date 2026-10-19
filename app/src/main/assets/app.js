@@ -13,7 +13,7 @@
   function say(message) { $('status').textContent = message; }
   function log(message) { console.warn('LANU: ' + message); } // No peer IDs or audio in logs.
   function safeGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
-  function safeSet(key, value) { try { localStorage.setItem(key, value); } catch (_) { log('Settings storage unavailable'); } }
+  function safeSet(key, value) { try { localStorage.setItem(key, value); return localStorage.getItem(key) === value; } catch (_) { log('Settings storage unavailable'); return false; } }
   function newId() {
     if (window.crypto && window.crypto.getRandomValues) {
       const numbers = new Uint32Array(1); window.crypto.getRandomValues(numbers);
@@ -414,10 +414,11 @@
         return false;
       }
       let next = newId();
-      while (next === myId) next = newId();
-      // Explicit user action only: update local identity before connecting so
-      // an offline restart cannot revive the retired ID.
-      safeSet('lanuId', next);
+      for (let attempts = 0; next === myId && attempts < 8; attempts++) next = newId();
+      if (next === myId) { say('Yeni kod oluşturulamadı. Tekrar dene.'); return false; }
+      // Explicit user action only: persist before retiring the old ID.
+      // A storage failure must not silently change the displayed identity.
+      if (!safeSet('lanuId', next)) { say('Kod kaydedilemedi. Telefon depolamasını kontrol et.'); return false; }
       myId = next;
       $('myid').textContent = next;
       pairs.forEach(session => session.close());
