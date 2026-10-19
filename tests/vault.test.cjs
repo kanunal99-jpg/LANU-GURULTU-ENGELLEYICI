@@ -21,3 +21,48 @@ test('tampered ciphertext cannot unlock and invalid PINs are rejected',async()=>
  const db=storage(),v=new LensVault(db,webcrypto);for(const pin of ['2011.','12345','abcdef','1234567890123'])await assert.rejects(()=>v.create(pin));
  await v.create('741963');v.lock();const record=JSON.parse(db.getItem('lens-vault-v1'));record.cipher=record.cipher.replace(/^./,record.cipher[0]==='A'?'B':'A');db.setItem('lens-vault-v1',JSON.stringify(record));await assert.rejects(()=>v.unlock('741963'));assert.equal(v.key,null);
 });
+
+test('cancelled initial PIN creation never writes a vault record',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);
+ await assert.rejects(v.create('741963',()=>false),/Cancelled/);
+ assert.equal(v.exists(),false);
+ assert.equal(v.key,null);
+});
+
+test('cancelling a PIN change during encryption preserves the previous PIN and contacts',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);
+ await v.create('741963');
+ v.data.contacts.push({code:'654321',name:'Contact'});
+ await v.write(v.data);
+ const ciphertext=db.getItem('lens-vault-v1');
+ let releaseEncryption, encryptionStarted;
+ const entered=new Promise(resolve=>{encryptionStarted=resolve;});
+ const delayedCrypto={
+   getRandomValues(bytes){return webcrypto.getRandomValues(bytes);},
+   subtle:{
+     importKey(...args){return webcrypto.subtle.importKey(...args);},
+     deriveKey(...args){return webcrypto.subtle.deriveKey(...args);},
+     decrypt(...args){return webcrypto.subtle.decrypt(...args);},
+     encrypt(...args){
+       return new Promise((resolve,reject)=>{
+         releaseEncryption=()=>webcrypto.subtle.encrypt(...args).then(resolve,reject);
+         encryptionStarted();
+       });
+     }
+   }
+ };
+ const pending=new LensVault(db,delayedCrypto);
+ await pending.unlock('741963');
+ let authorized=true;
+ const change=pending.create('852963',()=>authorized);
+ await entered;
+ authorized=false; // UI cancelled the gate while encryption was still pending.
+ releaseEncryption();
+ await assert.rejects(change,/Cancelled/);
+ assert.equal(db.getItem('lens-vault-v1'),ciphertext);
+ assert.deepEqual(pending.data.contacts,[{code:'654321',name:'Contact'}]);
+ pending.lock();
+ await assert.rejects(pending.unlock('852963'));
+ await pending.unlock('741963');
+ assert.equal(pending.data.contacts.length,1);
+});
