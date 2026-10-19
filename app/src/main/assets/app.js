@@ -34,6 +34,7 @@
     $('muteBtn').hidden = state !== 'connected';
     $('retryBtn').hidden = ready && !paused;
     native('setRinging', state === 'ringing' && !paused);
+    native('setIncomingNotification', state === 'ringing' && !paused);
     if (state !== 'dialing') { ringback = false; native('setRingback', false); }
     if (window.LanuLens) window.LanuLens.callState(state);
   }
