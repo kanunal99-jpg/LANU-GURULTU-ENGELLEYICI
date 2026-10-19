@@ -72,7 +72,7 @@ ws.on('connection', (socket, request) => {
     assert.match(await a.locator('#photoPreview').getAttribute('src'),/^data:image\/jpeg;base64,/);
     await a.locator('#closePhoto').click();
     async function unlock(page,first=true) {
-      const target=first?'#lensEmblem':'#lensLogo';
+      const target=first && await page.locator('#lensEmblem').isVisible()?'#lensEmblem':'#lensLogo';
       const box=await page.locator(target).boundingBox();
       const touch=await page.context().newCDPSession(page);
       await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2,id:1}]});
