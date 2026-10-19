@@ -253,7 +253,7 @@ test('invalid stored ID is replaced and persisted even when the initial connecti
   const storage = new Map([['lanuId', 'bad']]);
   const h = harness({storage,online:false});
   const id = storage.get('lanuId');
-  assert.match(id, /^[1-9]\\d{5}$/);
+  assert.match(id, /^[1-9]\d{5}$/);
   assert.equal(h.peers.length, 0);
   h.events.online(); assert.equal(h.peers[0].id, 'lanu-sesli-' + id);
 });
