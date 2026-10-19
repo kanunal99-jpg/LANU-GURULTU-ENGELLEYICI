@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
     private static final String HOME = "https://" + HOST + "/assets/index.html";
     private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFY = 14;
     private static final String CALL_CHANNEL = "lanu-call-v1";
+    private static final String OPEN_INCOMING = "com.lanu.sesli.OPEN_INCOMING";
     private static final int INCOMING_NOTIFICATION = 2901;
     private WebView web;
     private AudioManager audio;
@@ -131,6 +132,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView v, String url) {
+                if (HOME.equals(url)) openIncomingIfRequested();
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 return !localOrigin(r.getUrl()) || !r.getUrl().getPath().startsWith("/assets/");
             }
@@ -239,6 +243,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openIncomingIfRequested() {
+        if (web == null || destroyed || !visible) return;
+        Intent intent = getIntent();
+        if (intent == null || !OPEN_INCOMING.equals(intent.getAction())) return;
+        // Consume exactly once: rotate/relaunch must not re-open an old invitation.
+        intent.setAction(null);
+        web.evaluateJavascript("window.LanuLens && window.LanuLens.promptForIncoming && window.LanuLens.promptForIncoming()", null);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openIncomingIfRequested();
+    }
+
     private void setupIncomingChannel() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (manager == null) return;
@@ -258,6 +277,7 @@ public class MainActivity extends Activity {
         if (!value) { manager.cancel(INCOMING_NOTIFICATION); return; }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return;
         Intent open = new Intent(this, MainActivity.class)
+                .setAction(OPEN_INCOMING)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent tap = PendingIntent.getActivity(this, 301, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
