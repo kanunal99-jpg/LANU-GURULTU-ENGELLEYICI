@@ -3,6 +3,10 @@ package com.lanu.sesli;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.media.Ringtone;
@@ -46,7 +50,9 @@ public class MainActivity extends Activity {
     private static final String TAG = "LANU";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/index.html";
-    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13;
+    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFICATIONS = 14;
+    private static final String INCOMING_CHANNEL = "lens_incoming_v1";
+    private static final int INCOMING_NOTIFICATION = 4202;
     private WebView web;
     private AudioManager audio;
     private PermissionRequest pendingMicrophone, pendingCamera;
@@ -58,7 +64,7 @@ public class MainActivity extends Activity {
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private final Runnable repeatRing = new Runnable() {
         @Override public void run() {
-            if (!ringing || destroyed || !visible) return;
+            if (!ringing || destroyed || !(visible || backgroundListening)) return;
             try {
                 if (ringtone != null && !ringtone.isPlaying()) ringtone.play();
                 main.postDelayed(this, 3000);
@@ -73,6 +79,7 @@ public class MainActivity extends Activity {
         }
     };
     private boolean active, speaker, destroyed, visible;
+    private volatile boolean backgroundListening;
     private int previousMode;
     private boolean previousSpeaker;
     private AudioFocusRequest focus;
@@ -102,6 +109,11 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+        NotificationChannel incoming = new NotificationChannel(
+                INCOMING_CHANNEL, "Lanu Lens bildirimleri", NotificationManager.IMPORTANCE_HIGH);
+        incoming.setSound(null, null); // The native ring() path respects device silent mode.
+        incoming.enableVibration(false);
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(incoming);
         if (audio != null) audio.registerAudioDeviceCallback(devices, main);
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
@@ -149,6 +161,83 @@ public class MainActivity extends Activity {
         web.loadUrl(HOME);
     }
 
+    private boolean notificationsAllowed() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false;
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        return manager != null && manager.areNotificationsEnabled();
+    }
+
+    private boolean savedBackgroundPreference() {
+        return getSharedPreferences("lens-native-settings", MODE_PRIVATE)
+                .getBoolean("background-listener", false);
+    }
+
+    private void backgroundPreferenceResult(boolean enabled) {
+        if (web != null && !destroyed) {
+            web.evaluateJavascript("window.lanuBackgroundPermission && window.lanuBackgroundPermission(" +
+                    enabled + ")", null);
+        }
+    }
+
+    private void configureBackgroundListener(boolean enabled) {
+        if (!enabled) {
+            getSharedPreferences("lens-native-settings", MODE_PRIVATE).edit()
+                    .putBoolean("background-listener", false).apply();
+            backgroundListening = false;
+            stopService(new Intent(this, IncomingListenerService.class));
+            backgroundPreferenceResult(false);
+            return;
+        }
+        if (!notificationsAllowed()) {
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATIONS);
+            } else {
+                backgroundPreferenceResult(false);
+            }
+            return;
+        }
+        try {
+            startForegroundService(new Intent(this, IncomingListenerService.class));
+            backgroundListening = true;
+            getSharedPreferences("lens-native-settings", MODE_PRIVATE).edit()
+                    .putBoolean("background-listener", true).apply();
+            backgroundPreferenceResult(true);
+        } catch (RuntimeException e) {
+            backgroundListening = false;
+            getSharedPreferences("lens-native-settings", MODE_PRIVATE).edit()
+                    .putBoolean("background-listener", false).apply();
+            backgroundPreferenceResult(false);
+            Log.w(TAG, "Background listener unavailable", e);
+        }
+    }
+
+    private void showIncomingNotification() {
+        if (!notificationsAllowed()) return;
+        Intent open = new Intent(this, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra("lanu_open_incoming", true);
+        PendingIntent tap = PendingIntent.getActivity(this, 4202, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification alert = new Notification.Builder(this, INCOMING_CHANNEL)
+                .setSmallIcon(R.drawable.ic_lanu)
+                .setContentTitle("Lanu Lens")
+                .setContentText("Gelen çağrı")
+                .setContentIntent(tap)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_CALL)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setVisibility(Notification.VISIBILITY_SECRET)
+                .setTimeoutAfter(45000)
+                .build();
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(INCOMING_NOTIFICATION, alert);
+    }
+
+    private void clearIncomingNotification() {
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(INCOMING_NOTIFICATION);
+    }
+
     private void requestCapture(PermissionRequest request) {
         if (destroyed || !visible || !localOrigin(request.getOrigin())) { request.deny(); return; }
         String[] resources = request.getResources();
@@ -176,9 +265,20 @@ public class MainActivity extends Activity {
             }
         }
         if (code == BLUETOOTH) routeAudio();
+        if (code == NOTIFICATIONS) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                configureBackgroundListener(true);
+            else backgroundPreferenceResult(false);
+        }
     }
 
     private final class AudioBridge {
+        @JavascriptInterface public boolean isBackgroundListeningEnabled() {
+            return backgroundListening && !destroyed;
+        }
+        @JavascriptInterface public void setBackgroundListening(boolean enabled) {
+            main.post(() -> { if (!destroyed && visible) configureBackgroundListener(enabled); });
+        }
         @JavascriptInterface public void hideKeyboard() {
             main.post(() -> {
                 if (destroyed || web == null) return;
@@ -187,7 +287,7 @@ public class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void setRinging(boolean value) {
-            main.post(() -> ring(value && visible && !destroyed));
+            main.post(() -> ring(value && (visible || backgroundListening) && !destroyed));
         }
         @JavascriptInterface public void setRingback(boolean value) {
             main.post(() -> ringBack(value && visible && !destroyed));
@@ -225,12 +325,14 @@ public class MainActivity extends Activity {
         if(value==ringing)return;
         ringing=value;
         if(!value) {
+            clearIncomingNotification();
             main.removeCallbacks(repeatRing);
             if(ringtone!=null){ringtone.stop();ringtone=null;}
             if(vibrator!=null)vibrator.cancel();
             return;
         }
         if(audio==null)return;
+        showIncomingNotification();
         try {
             int mode=audio.getRingerMode();
             if(mode==AudioManager.RINGER_MODE_NORMAL) {
@@ -356,15 +458,42 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume(); visible = true;
-        if (web != null) { web.onResume(); web.evaluateJavascript("window.lanuForeground && window.lanuForeground(); window.lanuResume && window.lanuResume()", null); }
+        if (savedBackgroundPreference() && !backgroundListening && notificationsAllowed())
+            configureBackgroundListener(true);
+        if (web != null) {
+            web.onResume();
+            boolean fromNotification = getIntent() != null
+                    && getIntent().getBooleanExtra("lanu_open_incoming", false);
+            if (fromNotification) getIntent().removeExtra("lanu_open_incoming");
+            web.evaluateJavascript("window.lanuForeground && window.lanuForeground();" +
+                    "window.lanuResume && window.lanuResume();" +
+                    (fromNotification ? "window.lanuOpenPendingCall && window.lanuOpenPendingCall();" : ""), null);
+        }
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (visible && web != null && intent.getBooleanExtra("lanu_open_incoming", false)) {
+            intent.removeExtra("lanu_open_incoming");
+            web.evaluateJavascript("window.lanuOpenPendingCall && window.lanuOpenPendingCall()", null);
+        }
     }
     @Override protected void onStop() {
         visible = false;
-        ring(false); ringBack(false);
-        if(web!=null)web.evaluateJavascript("window.lanuBackground && window.lanuBackground()",null);
-        pauseCall("Uygulama arka plana alındı; görüşme kapatıldı.");
+        ringBack(false);
+        if (active) pauseCall("Uygulama arka plana alındı; görüşme kapatıldı.");
+        if (backgroundListening) {
+            // Keep the existing PeerJS socket available while an explicitly
+            // enabled foreground service protects this process from normal idle.
+            if (web != null) web.evaluateJavascript(
+                    "window.lanuBackgroundListening && window.lanuBackgroundListening()", null);
+        } else {
+            ring(false);
+            if (web != null) web.evaluateJavascript("window.lanuBackground && window.lanuBackground()", null);
+            pauseCall("Uygulama arka plana alındı; görüşme kapatıldı.");
+            if (web != null) web.onPause();
+        }
         if(pendingCamera!=null){pendingCamera.deny();pendingCamera=null;}
-        if (web != null) web.onPause();
         super.onStop();
     }
     @SuppressWarnings("deprecation")
@@ -373,6 +502,8 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.lanuBack ? window.lanuBack() : false",handled->{if(!"true".equals(handled))finish();});
     }
     @Override protected void onDestroy() {
+        backgroundListening = false;
+        stopService(new Intent(this, IncomingListenerService.class));
         ring(false); ringBack(false); setActive(false);
         files.shutdown(); photoBytes=null;
         destroyed = true;
