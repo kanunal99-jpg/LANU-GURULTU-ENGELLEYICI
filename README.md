@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.1.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.2.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -13,6 +13,12 @@ Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda fl
 Gelen görüşme, uygulama açıkken özel alan veya kamera ekranında sistem zil sesi ve titreşimle haber verir. Sessiz/titreşim modu korunur. Cevapla, reddet, karşı tarafın kapatması, ağ kaybı ve 45 saniye zaman aşımında zil durur. Arayan taraf, alıcıya ulaşıldığında çalma tonu duyar. Mikrofon yalnızca arayan aramayı başlatınca ve alıcı Cevapla seçince açılır. Gelen çağrı kameraya veya ilk ekrana kişi/kod taşımaz. Kamera ekranında çalan çağrıyı cevaplamak için PIN ile giriş gerekir. Bu alma seçeneği özel alandaki ayardan kapatılabilir.
 
 Kilitle, geri tuşu, üç dakika hareketsizlik (aktif görüşme dışında) ve arka plana geçiş özel alanı kilitler. Görüşme biter, mikrofon/kamera bırakılır. Kamera ekranında çağrı alma açıksa yalnızca uygulama ön plandayken sinyalleşme sürer; arka planda tamamen bırakılır. Android ekran görüntüsü/son uygulamalar önizlemesi FLAG_SECURE ile korunur. Kullanıcı fotoğrafları yalnızca Kaydet seçildiğinde sistem dosya seçicisiyle dışarı aktarılır.
+
+## Kalıcı görüşme kodu (2.0.2)
+
+İlk oluşturulan altı haneli görüşme kodu **internet olmasa bile** cihazda kalıcı tutulur. Aynı kod başka cihazda kullanılıyorsa kod sessizce değiştirilmez; diğer oturumu kapatıp **Yeniden bağlan** düğmesini kullan. Kullanıcı kendi isteğiyle değiştirmek isterse PIN ile özel alanı açıp **Güvenlik → Görüşme kodunu değiştir → Onayla ve yeni kod oluştur** akışını tamamlar. Kilitli alandan veya görüşme sırasında kod değiştirilemez. Depolama hatasında eski kod korunur.
+
+Kod değişince karşı tarafların rehberinde eski kod kalabilir; yeni kodunu paylaşman gerekir. Kodlar kişiye ait kriptografik kanıt sunmaz ve tek başına güvenlik mekanizması değildir.
 
 ## Gizlilik ve teknik sınırlar
 

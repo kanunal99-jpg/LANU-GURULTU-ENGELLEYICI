@@ -203,12 +203,65 @@ test('resume detects a destroyed PeerJS socket with stale ready flag', () => {
   assert.equal(h.get('callBtn').disabled, true);
 });
 
-test('old peer errors do not overwrite new peer readiness', () => {
-  const h = harness(); const old = h.peers[0]; old.emit('error', {type: 'unavailable-id'}); h.open(); old.emit('error', {type: 'network'});
+test('a code collision never silently replaces the saved code or accepts a stale peer', () => {
+  const h = harness(); h.open();
+  const old = h.peers[0]; old.emit('error', {type: 'unavailable-id'});
+  assert.equal(h.peers.length, 1);
+  assert.equal(old.destroyed, true);
+  assert.equal(h.context.localStorage.getItem('lanuId'), '123456');
+  assert.equal(h.get('myid').textContent, '123456');
+  assert.match(h.get('status').textContent, /Kodun değiştirilmedi/);
+  old.emit('open'); assert.equal(h.get('callBtn').disabled, true);
+  h.click('retryBtn');
+  assert.equal(h.peers.length, 2);
+  assert.equal(h.peers[1].id, 'lanu-sesli-123456');
+  h.open(); old.emit('error', {type: 'network'});
   assert.equal(h.get('callBtn').disabled, false);
 });
+test('code rotation is an explicit unlocked user action and persists for later reconnects', () => {
+  const h = harness({lens:true}); h.open();
+  h.context.crypto = {getRandomValues(values) { values[0] = 500000; return values; }};
+  assert.equal(h.context.localStorage.getItem('lanuId'), '123456');
+  assert.equal(h.context.LanuCalls.rotateCode(), true);
+  assert.equal(h.context.localStorage.getItem('lanuId'), '600000');
+  assert.equal(h.get('myid').textContent, '600000');
+  assert.equal(h.peers.at(-1).id, 'lanu-sesli-600000');
+  h.open();
+  h.click('retryBtn');
+  assert.equal(h.peers.at(-1).id, 'lanu-sesli-600000');
+});
+test('locked or busy sessions cannot rotate the user identity', () => {
+  const h = harness({lens:true}); h.open();
+  h.context.crypto = {getRandomValues(values) { values[0] = 500000; return values; }};
+  h.context.LanuLens.isOpen = () => false;
+  assert.equal(h.context.LanuCalls.rotateCode(), false);
+  h.context.LanuLens.isOpen = () => true;
+  h.get('partner').value = '654321'; h.click('callBtn');
+  assert.equal(h.context.LanuCalls.rotateCode(), false);
+  assert.equal(h.context.localStorage.getItem('lanuId'), '123456');
+});
+test('a failed storage write never changes the active identity', () => {
+  const h = harness({lens:true}); h.open();
+  h.context.crypto = {getRandomValues(values) { values[0] = 500000; return values; }};
+  h.context.localStorage.setItem = () => { throw Error('QuotaExceeded'); };
+  assert.equal(h.context.LanuCalls.rotateCode(), false);
+  assert.equal(h.get('myid').textContent, '123456');
+  assert.equal(h.peers.length, 1);
+  assert.match(h.get('status').textContent, /kaydedilemedi/);
+});
+test('invalid stored ID is replaced and persisted even when the initial connection is offline', () => {
+  const storage = new Map([['lanuId', 'bad']]);
+  const h = harness({storage,online:false});
+  const id = storage.get('lanuId');
+  assert.match(id, /^[1-9]\d{5}$/);
+  assert.equal(h.peers.length, 0);
+  h.context.navigator.onLine = true; h.events.online();
+  assert.equal(h.peers[0].id, 'lanu-sesli-' + id);
+});
 test('invalid persisted ID is replaced', () => {
-  const h = harness({storage: new Map([['lanuId', 'bad']])}); h.open(); assert.match(h.get('myid').textContent, /^[1-9]\d{5}$/);
+  const storage = new Map([['lanuId','bad']]),h = harness({storage}); h.open();
+  assert.match(h.get('myid').textContent, /^[1-9]\d{5}$/);
+  assert.equal(storage.get('lanuId'), h.get('myid').textContent);
 });
 test('peer unavailable closes outgoing call and microphone', async () => {
   const h = harness(); h.open(); h.get('partner').value = '654321'; h.click('callBtn'); h.resolve(); await h.flush(); h.peers[0].emit('error', {type: 'peer-unavailable'});
