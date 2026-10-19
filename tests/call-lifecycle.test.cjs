@@ -6,7 +6,7 @@ const EventEmitter = require('node:events');
 const source = fs.readFileSync('app/src/main/assets/app.js', 'utf8');
 
 function harness(options = {}) {
-  const elements = {}, events = {}, timers = new Map(), peers = [], native = [], ringing = [], ringback = [];
+  const elements = {}, events = {}, timers = new Map(), peers = [], native = [], ringing = [], ringback = [], incomingNotifications = [];
   let timerId = 0, requested = 0, resolveMedia, rejectMedia;
   class Element {
     constructor(id) { this.id = id; this.checked = true; this.hidden = false; this.value = ''; this.textContent = ''; this.events = {}; }
@@ -47,14 +47,14 @@ function harness(options = {}) {
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timers.delete(id); },
     addEventListener(event, fn) { events[event] = fn; },
-    LanuAudio: {setRinging:value=>ringing.push(value),setRingback:value=>ringback.push(value),setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
+    LanuAudio: {setRinging:value=>ringing.push(value),setIncomingNotification:value=>incomingNotifications.push(value),setRingback:value=>ringback.push(value),setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
   if(options.lens) context.LanuLens={canReceive:()=>options.lensListen===true,isOpen:()=>options.lensOpen!==false,callState(){},pairStatus(){},clearPair(){}};
   context.window = context;
   vm.runInNewContext(source, context);
   const get = id => document.getElementById(id);
   const flush = () => new Promise(resolve => setImmediate(resolve));
   const open = () => { peers.at(-1).emit('open'); };
-  return {get, peers, track, stream, events, timers, context, native, ringing, ringback, open, flush, requested: () => requested,
+  return {get, peers, track, stream, events, timers, context, native, ringing, ringback, incomingNotifications, open, flush, requested: () => requested,
     resolve: (providedStream = stream) => resolveMedia(providedStream), reject: name => rejectMedia({name}),
     Connection, click: id => get(id).events.click(),
     deadline: () => { for (const [id, timer] of timers) if (timer.delay === 45000) { timers.delete(id); timer.fn(); } }
@@ -581,4 +581,36 @@ test('camera standby rings with PIN locked but cannot answer or capture audio be
  const h=harness({lens:true,lensOpen:false,lensListen:true});h.open();const call=new h.Connection();h.peers[0].emit('call',call);
  assert.equal(h.ringing.at(-1),true);assert.equal(h.requested(),0);h.click('answerBtn');assert.equal(h.requested(),0);assert.equal(call.answered,0);
  h.context.LanuCalls.deactivate(false);assert.equal(h.ringing.at(-1),false);assert.equal(h.peers[0].destroyed,true);
+});
+
+test('incoming call posts only a ringing notification and clears it on rejection',()=>{
+  const h=harness();h.open();
+  const incoming=new h.Connection();h.peers[0].emit('call',incoming);
+  assert.equal(h.incomingNotifications.at(-1),true);
+  assert.equal(h.requested(),0,'never open microphone just to notify');
+  h.click('hangBtn');
+  assert.equal(h.incomingNotifications.at(-1),false);
+});
+test('incoming notification disappears when app is backgrounded',()=>{
+  const h=harness();h.open();
+  h.peers[0].emit('call',new h.Connection());
+  assert.equal(h.incomingNotifications.at(-1),true);
+  h.context.lanuPause('Uygulama arka plana alındı');
+  assert.equal(h.incomingNotifications.at(-1),false);
+});
+test('incoming call notification does not outlive a call timeout',()=>{
+  const h=harness();h.open();h.peers[0].emit('call',new h.Connection());
+  assert.equal(h.incomingNotifications.at(-1),true);
+  h.deadline();
+  assert.equal(h.incomingNotifications.at(-1),false);
+});
+test('incoming notification uses a protected Android channel and never includes peer data',()=>{
+  const fs=require('node:fs');
+  const java=fs.readFileSync('app/src/main/java/com/lanu/sesli/MainActivity.java','utf8');
+  const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
+  assert.match(java,/setVisibility\(Notification\.VISIBILITY_SECRET\)/);
+  assert.match(java,/setContentText\("Yeni etkinlik var\. Açmak için dokun\."\)/);
+  assert.match(java,/checkSelfPermission\(Manifest\.permission\.POST_NOTIFICATIONS\)/);
+  assert.match(html,/id="notificationPermission"/);
+  assert.doesNotMatch(java,/setContentTitle\([^\n]*\.peer\b/);
 });
