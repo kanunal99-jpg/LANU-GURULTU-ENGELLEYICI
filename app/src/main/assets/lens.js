@@ -105,7 +105,7 @@
   function lock(listen = true) {
     dismissKeyboard();gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
     if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
-    $('privateView').hidden=$('gate').hidden=true;$('cameraView').hidden=false;
+    $('privateView').hidden=$('gate').hidden=true;$('codeChangeConfirm').hidden=true;$('cameraView').hidden=false;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
@@ -169,6 +169,12 @@
   });
   $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{dismissKeyboard();gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
+  $('changeCode').addEventListener('click',()=>{if(opened)$('codeChangeConfirm').hidden=false;});
+  $('codeChangeCancel').addEventListener('click',()=>$('codeChangeConfirm').hidden=true);
+  $('codeChangeSubmit').addEventListener('click',()=>{
+    if(!opened)return;
+    if(calls()&&calls().rotateCode())$('codeChangeConfirm').hidden=true;
+  });
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
   $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});
   $('pairBtn').addEventListener('click',()=>{if(opened)calls().pair($('pairCode').value.trim());});
