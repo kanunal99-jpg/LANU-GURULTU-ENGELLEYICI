@@ -5,7 +5,7 @@
   const DEADLINE = 45000;
   let peer = null, call = null, stream = null, state = 'idle', ready = false;
   let epoch = 0, timeout = null, retry = null, connectTimeout = null, transportTimeout = null, attempts = 0;
-  let muted = false, paused = false, myId = '', collisions = 0;
+  let muted = false, paused = false, myId = '';
   const pairs = new Set();
   let ringback = false;
 
@@ -295,7 +295,7 @@
     current.on('open', () => {
       if (peer !== current) return;
       clearTimeout(connectTimeout); clearTimeout(retry); retry = null;
-      ready = true; attempts = 0; collisions = 0; myId = id;
+      ready = true; attempts = 0; myId = id;
       $('myid').textContent = id; safeSet('lanuId', id); ui();
       if (state === 'idle') say('Hazır. Karşı tarafın kodunu yazarak arayabilirsin.');
     });
@@ -303,8 +303,14 @@
       if (peer !== current) return;
       log('Signaling error: ' + error.type);
       if (error.type === 'unavailable-id') {
-        if (++collisions <= 5) start(newId());
-        else { ready = false; say('Kod ayrılamadı. Yeniden bağlanmayı dene.'); ui(); }
+        // A shared six-digit code is a user identity, not a disposable connection ID.
+        // A collision must never silently rotate it (or overwrite the saved code).
+        ready = false;
+        peer = null;
+        clearTimeout(connectTimeout); connectTimeout = null;
+        try { current.destroy(); } catch (_) { log('Conflicting signaling session could not be closed'); }
+        ui();
+        say('Görüşme kodun şu anda başka bir bağlantıda kullanılıyor. Kodun değiştirilmedi. Diğer oturumu kapatıp Yeniden bağlan düğmesine bas.');
       } else if (error.type === 'peer-unavailable') {
         if (state !== 'idle') endCall('Karşı taraf bulunamadı. Kodu ve uygulamasının açık olduğunu kontrol et.', false);
       } else {
@@ -401,7 +407,26 @@
       else {paused=false;if(!peer||peer.destroyed||peer.disconnected||!ready)start(myId||newId());else ui();}
     },
     dial(code) { if(window.LanuLens && window.LanuLens.isOpen()){$('partner').value=code;dial();} },
-    pair, state:()=>state
+    pair,
+    rotateCode() {
+      if (!window.LanuLens || !window.LanuLens.isOpen() || state !== 'idle') {
+        say('Kod değişimi için özel alan açık ve görüşme kapalı olmalı.');
+        return false;
+      }
+      let next = newId();
+      while (next === myId) next = newId();
+      // Explicit user action only: update local identity before connecting so
+      // an offline restart cannot revive the retired ID.
+      safeSet('lanuId', next);
+      myId = next;
+      $('myid').textContent = next;
+      pairs.forEach(session => session.close());
+      paused = false; attempts = 0;
+      start(next);
+      say(navigator.onLine === false ? 'Yeni kod kaydedildi. İnternet gelince bağlan.' : 'Yeni kod kaydedildi. Bağlanıyor…');
+      return true;
+    },
+    state:()=>state
   };
   ['ns', 'ec', 'agc'].forEach(id => {
     const saved = safeGet('lanu-' + id); if (saved !== null) $(id).checked = saved === 'true';
@@ -431,7 +456,7 @@
   $('playBtn').addEventListener('click', () => { $('playBtn').hidden = true; playRemote(); });
   $('retryBtn').addEventListener('click', () => {
     if (state !== 'idle') endCall('Yeniden bağlanılıyor.');
-    paused = false; attempts = 0; collisions = 0; start(myId || newId());
+    paused = false; attempts = 0; start(myId || newId());
   });
   window.lanuPause = message => {
     paused = true;
@@ -468,6 +493,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.'); else window.lanuResume(); });
   const storedId = safeGet('lanuId');
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
+  if (!/^[1-9]\d{5}$/.test(storedId || '')) safeSet('lanuId', myId);
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     say('Mikrofon desteği yok. Android System WebView bileşenini güncelleyin.'); ui();
   } else if (available()) start(myId);
