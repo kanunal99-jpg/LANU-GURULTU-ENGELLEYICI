@@ -46,6 +46,9 @@ public class SmokeInstrumentation extends Instrumentation {
             require(web, "document.title === 'Lanu Lens' && document.getElementById('privateView').hidden", "Camera-only landing");
             require(web, "!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)", "No private hints in camera UI");
             require(web, "typeof window.LanuAudio.setRinging === 'function' && typeof window.LanuAudio.savePhoto === 'function'", "Ringtone and export bridges");
+            require(web, "typeof window.LanuAudio.setBackgroundListening === 'function' && typeof window.LanuAudio.isBackgroundListeningEnabled === 'function'", "Opt-in native background listener bridge");
+            require(web, "document.getElementById('backgroundEnabled') !== null && document.getElementById('privateView').hidden", "Background notification consent stays behind PIN");
+            require(web, "!window.LanuAudio.isBackgroundListeningEnabled()", "Background listening defaults to off on a clean emulator");
             // Real OS touchscreen events, not DOM-dispatched PointerEvents.
             hold(web,"lensEmblem",180,false);
             Thread.sleep(3100);
