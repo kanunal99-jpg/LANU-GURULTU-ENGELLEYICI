@@ -20,15 +20,18 @@
       if (!Array.isArray(data.contacts) || data.contacts.length > 200) throw new Error('Kayıt açılamadı.');
       this.key = key; this.salt = salt; this.data = data; return data;
     }
-    async create(pin) {
+    async create(pin, canCommit = () => true) {
       const salt = this.crypto.getRandomValues(new Uint8Array(16)), key = await this.derive(pin,salt);
       const data = this.data || {contactsEnabled:false,contacts:[],incomingEnabled:true};
-      await this.write(data,key,salt); this.key = key; this.salt = salt; this.data = data; return data;
+      await this.write(data,key,salt,canCommit); this.key = key; this.salt = salt; this.data = data; return data;
     }
-    async write(data, key = this.key, salt = this.salt) {
+    async write(data, key = this.key, salt = this.salt, canCommit = () => true) {
       if (!key || !salt) throw new Error('Önce kilidi aç.');
       const iv = this.crypto.getRandomValues(new Uint8Array(12));
       const cipher = await this.crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));
+      // Encrypt is asynchronous. A user may cancel, lock or background the app
+      // while it is pending. Never commit a canceled PIN replacement.
+      if (!canCommit()) throw new Error('Cancelled');
       this.storage.setItem(KEY,JSON.stringify({v:1,salt:encode(salt),iv:encode(iv),cipher:encode(cipher)}));
     }
     lock() { this.key = null; this.data = null; this.salt = null; }
