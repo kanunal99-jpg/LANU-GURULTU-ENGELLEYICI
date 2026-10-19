@@ -88,7 +88,9 @@
       try{storage().removeItem('lens-failures');storage().removeItem('lens-delay');}catch(_){}
       allowIncoming=data.incomingEnabled!==false;try{storage().setItem('lens-listen',String(allowIncoming));}catch(_){allowIncoming=false;}$('incomingEnabled').checked=allowIncoming;
       opened=true;$('gate').hidden=true;$('cameraView').hidden=true;$('privateView').hidden=false;
-      $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();touch();
+      $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;
+      $('backgroundEnabled').checked=!!data.backgroundEnabled;
+      renderContacts();touch();
       if(calls())calls().activate();
     }catch(e){
       if(token!==gateEpoch)return;
@@ -151,6 +153,28 @@
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
   window.lanuForeground=()=>{suspended=false;};
   window.lanuBackground=()=>{entries.forEach(entry=>entry.cancel());suspended=true;lock(false);};
+  window.lanuBackgroundListening=()=>{
+    entries.forEach(entry=>entry.cancel());
+    if (!allowIncoming) { window.lanuBackground(); return; }
+    suspended=false;
+    // A microphone must never remain active in the background. Return to
+    // PIN-locked camera state, and keep only the existing idle PeerJS socket.
+    lock(true);
+  };
+  window.lanuOpenPendingCall=()=>{
+    if(!opened && calls() && calls().state()==='ringing' && $('gate').hidden) gate();
+    else if(opened && calls() && calls().state()==='ringing')
+      $('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});
+  };
+  window.lanuBackgroundPermission=enabled=>{
+    $('backgroundStatus').textContent=enabled
+      ? 'Arka planda çağrı dinleme etkin; bildirim gösteriliyor.'
+      : 'Arka planda çağrı dinleme devre dışı veya bildirim izni verilmedi.';
+    if(!enabled && $('backgroundEnabled').checked){
+      $('backgroundEnabled').checked=false;
+      if(opened)persist(data=>{data.backgroundEnabled=false;});
+    }
+  };
   window.lanuBack=()=>{if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
   entries = Array.from(document.querySelectorAll('[data-lens-entry]')).map(element => LensEntry.attach(element, () => gate(), {
     enabled: () => !$('cameraView').hidden && $('gate').hidden && $('photoView').hidden && !document.hidden
@@ -177,9 +201,25 @@
   });
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
   $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});
+  $('backgroundEnabled').addEventListener('change',async()=>{
+    const desired=$('backgroundEnabled').checked;
+    const ok=await persist(data=>{data.backgroundEnabled=desired;});
+    if(!ok){$('backgroundEnabled').checked=!desired;return;}
+    if(window.LanuAudio&&typeof window.LanuAudio.setBackgroundListening==='function')
+      window.LanuAudio.setBackgroundListening(desired);
+    else window.lanuBackgroundPermission(false);
+  });
   $('pairBtn').addEventListener('click',()=>{if(opened)calls().pair($('pairCode').value.trim());});
   $('pairAccept').addEventListener('click',()=>{if(!incomingPair)return;const req=incomingPair;incomingPair=null;$('pairRequest').hidden=true;req.respond(true);if($('saveIncoming').checked)paired(req.code);});
   $('pairReject').addEventListener('click',()=>{if(incomingPair)incomingPair.respond(false);incomingPair=null;$('pairRequest').hidden=true;});
   document.addEventListener('pointerdown',touch);document.addEventListener('keydown',touch);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){window.lanuBackground();}else window.lanuForeground();});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      let enabled=false;
+      try{enabled=!!(window.LanuAudio&&window.LanuAudio.isBackgroundListeningEnabled
+        &&window.LanuAudio.isBackgroundListeningEnabled());}catch(_){}
+      if(enabled && allowIncoming)window.lanuBackgroundListening();
+      else window.lanuBackground();
+    }else window.lanuForeground();
+  });
 })();
