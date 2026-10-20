@@ -208,17 +208,32 @@ public class SmokeInstrumentation extends Instrumentation {
         // Calibrate CSS-to-screen offsets using a real short touch. WebView
         // padding/insets differ across Android versions and must not turn a
         // correct gesture into a tap below the small header emblem.
-        requireForegroundWindow(web);
-        long probe=SystemClock.uptimeMillis();
-        pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(50);
-        pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
+        // Android 10 AOSP may temporarily focus a system window after
+        // instrumentation/IME activity. A successful OS injection does NOT
+        // mean the WebView received the event. Retry only real OS touches,
+        // with explicit native focus reacquisition, never synthetic JS.
+        String observedJson="null";
+        for(int attempt=0;attempt<4;attempt++){
+            runOnMainSync(()->{
+                web.setFocusableInTouchMode(true);
+                web.requestFocus();
+                web.requestFocusFromTouch();
+            });
+            requireForegroundWindow(web);
+            SystemClock.sleep(150+attempt*250);
+            js(web,"window.__entryTrace=[]");
+            long probe=SystemClock.uptimeMillis();
+            pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(75);
+            pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
+            observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
+                    +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
+                    +"if(t)return t.touches[0];"
+                    +"const p=events.find(e=>e.type==='pointerdown');return p?[p.x,p.y]:null;})()");
+            if(observedJson!=null && !"null".equals(observedJson))break;
+        }
         // Chrome 74 can expose native POINTER events without a touchstart.
         // Calibrate against whichever real OS event actually reached WebView;
         // never continue on null or manufacture a DOM touch.
-        String observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
-                +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
-                +"if(t)return t.touches[0];"
-                +"const p=events.find(e=>e.type==='pointerdown');return p?[p.x,p.y]:null;})()");
         if(observedJson==null || "null".equals(observedJson))
             throw new AssertionError("Real Android touch calibration failed: "
                     + js(web,"JSON.stringify({focus:document.hasFocus(),trace:window.__entryTrace,"
