@@ -9,6 +9,27 @@ android {
     namespace = "com.lanu.sesli"
     compileSdk = 35
     buildFeatures { buildConfig = true }
+    signingConfigs {
+        val storePath = providers.environmentVariable("LANU_SIGNING_STORE_FILE").orNull
+        val storePass = providers.environmentVariable("LANU_SIGNING_STORE_PASSWORD").orNull
+        val alias = providers.environmentVariable("LANU_SIGNING_KEY_ALIAS").orNull
+        val keyPass = providers.environmentVariable("LANU_SIGNING_KEY_PASSWORD").orNull
+        if (!storePath.isNullOrBlank() && !storePass.isNullOrBlank()
+            && !alias.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+            create("otaRelease") {
+                storeFile = file(storePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfigs.findByName("otaRelease")?.let { signingConfig = it }
+        }
+    }
     defaultConfig {
         applicationId = "com.lanu.sesli"
         minSdk = 26
