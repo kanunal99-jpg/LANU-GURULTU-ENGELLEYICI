@@ -78,3 +78,18 @@ test('enrollment and login proofs expire; bad encoding and queue flooding fail c
  await assert.rejects(()=>broker.enroll(pub,c.nonce,proof),/expired|invalid/i);
  await assert.rejects(()=>Auth.signChallenge(webcrypto,a,'OTHER',c.nonce),/Invalid device challenge/);
 });
+
+test('login token expires, and rate limiting refuses repeated invitation abuse',async()=>{
+ let now=Date.now();const broker=new Broker({clock:()=>now});
+ const alice=await Auth.generate(webcrypto),bob=await Auth.generate(webcrypto);
+ await enroll(broker,alice);await enroll(broker,bob);
+ const token=await login(broker,alice);
+ for(let i=0;i<5;i++) {
+   const invite=await Auth.signInvite(webcrypto,alice,bob.deviceId,now);
+   assert.equal((await broker.submitInvite(token,invite)).accepted,true);
+ }
+ const sixth=await Auth.signInvite(webcrypto,alice,bob.deviceId,now);
+ await assert.rejects(()=>broker.submitInvite(token,sixth),/Rate limited/);
+ now+=15*60000+1;
+ assert.throws(()=>broker.authorize(token),/Unauthorized/);
+});
