@@ -14,7 +14,9 @@ if [[ "$1 $2" == "repo view" ]]; then echo PUBLIC; exit 0; fi
 if [[ "$1" == "api" && "$2" == *"contents/latest.json"* ]]; then
   echo "gh: \${MOCK_ERROR} (HTTP \${MOCK_CODE})" >&2; exit 1
 fi
-if [[ "$1 $2" == "release view" ]]; then exit 1; fi
+if [[ "$1" == "api" && "$2" == *"/releases/tags/"* ]]; then
+  echo 'gh: Not Found (HTTP 404)' >&2; exit 1
+fi
 if [[ "$1 $2" == "release create" ]]; then exit 15; fi
 exit 1
 `,{mode:0o755});
