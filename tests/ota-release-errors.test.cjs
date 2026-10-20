@@ -21,6 +21,9 @@ exit 1
     fs.writeFileSync(path.join(bin,'apksigner'),`#!/usr/bin/env bash
 echo 'Signer #1 certificate SHA-256 digest: ${'a'.repeat(64)}'
 `,{mode:0o755});
+    fs.writeFileSync(path.join(bin,'aapt'),`#!/usr/bin/env bash
+echo "package: name='com.lanu.sesli' versionCode='120' versionName='2.0.8'"
+`,{mode:0o755});
     const env={...process.env,PATH:bin+':'+process.env.PATH,GH_TOKEN:'mock-secret',
       GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',GITHUB_RUN_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.8',
       LANU_OTA_MANIFEST_URL:'https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json',
