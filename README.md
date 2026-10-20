@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.8.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.9.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -89,6 +89,12 @@ Kurulum için bilinmeyen uygulama kaynaklarına izin vermek gerekirse Android Ay
 
 Yeni 2.0.8 debug test APK'sı da, daha önce yüklenmiş debug APK ile farklı imza kullanıyorsa sistem tarafından reddedilir. Henüz PIN/rehber/şifreli veri yoksa eski APK'yı kaldırıp yeni APK'yı kurabilirsin; bu eski görüşme kodunu/PIN'i sıfırlar. Sürekli yerinde OTA için kurulumda kalıcı **production** imza kullanılmalıdır.
 
+
+## Premium Android geliştirme standardı (2.0.9)
+
+Kullanıcının **LANU Premium Professional — Android Yazılım Geliştirme Master Prompt** gereksinimleri `docs/PREMIUM-ANDROID-STANDARD-2026-10-20.md` dosyasında kapsamlı denetlendi. Yeni release varyantında **R8 optimizasyonu/resource shrinking**, dar kapsamlı WebView JavaScript bridge keep kuralları, merkezi **Gradle Version Catalog**, fail-closed yerel asset istekleri, Safe Browsing ve özel alana bağlı mikrofon izni bulunmaktadır. CI'da ayrıca **R8 mapping + kritik JS arayüzlerinin release DEX'te korunması**, debug/release Android derleme/lint, WebRTC ve emülatör testleri çalışır. Release mapping özel GitHub Actions artifact'ındadır, public APK dağıtımına konulmaz.
+
+**Açık kalan aşamalı modernizasyon:** Kotlin + MVVM/MVI + Compose/Material 3 + Hilt + Coroutines/Flow ve Firebase Crashlytics bugün uygulamaya entegre değildir. Kapsamlı bir yeniden yazım PIN/rehber verilerini, kamera ve WebRTC'yı riske atacağından adım adım planlandı; dış Firebase uygulama yapılandırması olmadan Crashlytics etkinmiş gibi gösterilmez. Üretim OTA için public binary-only depo, stabil release keystore ve ilk gerçek cihaz güncelleme kabul testi hâlâ gereklidir.
 
 ### OTA 2.0.8 güvenlik ve dayanıklılık
 

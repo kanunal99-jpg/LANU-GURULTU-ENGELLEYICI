@@ -1,4 +1,4 @@
-plugins { id("com.android.application") }
+plugins { alias(libs.plugins.android.application) }
 
 // Bake in a fixed public binary-only feed even before its first release.
 // Once that feed is published, installed production builds work without an
@@ -31,7 +31,12 @@ android {
     }
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfigs.findByName("otaRelease")?.let { signingConfig = it }
         }
     }
@@ -40,7 +45,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "2.0.8"
+        versionName = "2.0.9"
         buildConfigField("String", "OTA_MANIFEST_URL", "\"$otaManifestUrl\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
@@ -51,6 +56,6 @@ android {
     lint { abortOnError = true }
 }
 dependencies {
-    implementation("androidx.webkit:webkit:1.11.0")
-    implementation("androidx.core:core:1.13.1")
+    implementation(libs.androidx.webkit)
+    implementation(libs.androidx.core)
 }
