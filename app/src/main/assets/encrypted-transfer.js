@@ -73,8 +73,13 @@
     if(storage.getItem(ROOT)!==null)throw Error('Existing PIN vault must never be overwritten');
     if(!canCommit())throw Error('Cancelled');
     const previousRoute=storage.getItem(ROUTE);
+    verifyRoute(previousRoute);
+    // A device may already own a routing ID even without a PIN vault.
+    // Import must never silently hijack that address book/call identity.
+    if(previousRoute!==null && data.routingId!==null && previousRoute!==data.routingId)
+      throw Error('Routing identity conflict; destination unchanged');
     try{
-      if(data.routingId!==null)storage.setItem(ROUTE,data.routingId);
+      if(data.routingId!==null && previousRoute===null)storage.setItem(ROUTE,data.routingId);
       storage.setItem(ROOT,data.vaultCipher); // Write the validated vault last.
     }catch(error){
       try{
