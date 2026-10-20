@@ -82,5 +82,5 @@ test('missing IndexedDB and write denial do not silently create or rotate identi
  const store=create(fakeIndexedDB({failWrite:true}));
  await assert.rejects(()=>loadOrCreate(webcrypto,store),/QuotaExceeded/);
  assert.equal(await store.load(),null);
- await assert.rejects(()=>store.save({deviceId:'0'.repeat(64),privateKey:{extractable:true},publicKey:{}}),/Unsafe/);
+ assert.throws(()=>store.save({deviceId:'0'.repeat(64),privateKey:{extractable:true},publicKey:{}}),/Unsafe/);
 });
