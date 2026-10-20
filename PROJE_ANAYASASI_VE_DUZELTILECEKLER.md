@@ -168,3 +168,34 @@ Bu puanlar kaynak kodu, birleştirilmiş PR'lar, geçmiş CI/Release ve kapatıl
 - **13/15**: yukarıdaki üretim zorunlulukları büyük ölçüde kanıtlı, kalan risk düşük ve tanımlı.
 - **14/15**: bütün P0 kabul kapıları kapanmış, iki gerçek cihaz/yayın kanıtı ve geri dönüş tatbikatı var.
 - Harici hesap/repo/anahtar kurmadan **sahte tamamlandı** yok. Debug APK imzalı sürümün üzerine veri kayıpsız production OTA vaadi yok.
+
+---
+
+## 20.10.2026 — Kimlik ve OTA hedef 14/15: kanıtlı teslim güncellemesi
+
+**Kural:** Kod teslimi, CI ve üretim kabulü birbirinden bağımsızdır. Harici hesap, kalıcı imzalama, güvenilir backend, FCM ve iki fiziksel cihaz testi olmadan kimlik veya OTA alanına 13–14/15 **üretim** puanı yazılmaz. Önceki kanıta dayalı üretim kabul baz puanları kimlik/arka plan çağrısı 2/15, OTA/dağıtım 5/15; hedef her biri 14/15.
+
+### Bu dönüşte teslim edilen kod
+- **[PR #39](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/39) — birleştirildi, CI başarılı:** Debug/unpinned APK'da OTA status/check/download/install tümüyle fail-closed; production APK'sının gerçek signer SHA-256 sertifikası yayın öncesi `apksigner` ile doğrulanır; Android 15 smoke ve kaynak regresyonları.
+- **[PR #40](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/40) — birleştirildi, CI başarılı:** Nonextractable P-256 CryptoKey'i WebView IndexedDB üzerinden ilk-yazan-kazanır biçimde kalıcı tutma arayüzü. Duplicate, eşzamanlı ilk kayıt, depolama hatası, imza doğrulama negatif testleri; Android 15 WebView smoke. Modül yalnız yüklenir; canlı kimlik akışına henüz bağlanmaz.
+- **[PR #41](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/41) — birleştirildi, CI başarılı:** Node tabanlı güvenli kimlik broker çekirdeği: enrollment/login tek kullanımlık challenge, P-256 proof-of-possession, süreli oturum, device revoke, imzalı çağrı daveti TTL, rate limits ve anti-replay. **Servis değil, deploy edilmemiş çekirdek**; bellek üstündeki durum veri merkezinde kalıcı/durabilen güvenli depolama yerine geçmez.
+
+### 14/15 kimlik üretim kapısı
+- [ ] Güvenilir TLS backend, atomik ve kalıcı kimlik/challenge/token store, çok örnekli anti-replay/limit, loglarda kişisel veri ayıklaması, imzalı challenge ve kayıt politikası canlı çalışıyor
+- [ ] PIN arkasından cihaz anahtarı gerçek enroll/login akışına bağlandı; açık anahtar fingerprint eşleştirmesi ve hesap/cihaz kaydı yetki iptali test edildi
+- [ ] Backend yalnız yetkili `callId` için FCM high priority çağrı gönderiyor; TTL, iptal, kilit ekranı, bildirim red/izin yok ve Doze testleri mevcut
+- [ ] İki gerçek Android farklı ağda ve Bluetooth ile güvenli ses bağlantısını sağladı; sahte caller/tekrar/timeout/revoke testleri kanıtlandı
+- [ ] Push mesajında kod/PIN/rehber yok; Google servis hesabı sunucuda, APK'da yok
+
+### 14/15 OTA üretim kapısı
+- [ ] *Kullanıcının güvenli ortamında* kalıcı production keystore, bağımsız korumalı yedek, anahtar sertifika parmak izi ve GitHub Actions sınırlı kapsamlı secrets/vars kuruldu
+- [ ] Public binary-only `kanunal99-jpg/LANU-LENS-OTA` oluşturuldu; yalnız imzalı APK ve doğrulanmış `latest.json` yayımlanıyor, private kaynak kod sızmadı
+- [ ] Release öncesi SHA-256, Android package ID, sertifika pin, versionName/versionCode, negatif manifest/redirect/yanlış signer/sürüm testleri CI'da başarılı
+- [ ] Aynı sertifikayla artan 2 release, iki gerçek Android'de **yerinde ve veri kaybı olmadan** kuruldu; eski PIN/rehber/PeerJS kodunun korunması doğrulandı
+- [ ] Kurtarma/rollback ve key-loss runbook sınandı. İmzası farklı eski debug uygulaması üzerine doğrudan production kurma veya veri silerek geçiş YASAK; kullanıcı kontrollü şifreli export/restore kanıtı ön koşuldur
+
+### Dış kuruluma ait bilgi — sırları belgeye yazma
+GitHub private repo → Settings → Secrets and variables → Actions:
+`LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD`, `LANU_OTA_PUBLISH_TOKEN` **Secrets**; `LANU_RELEASE_CERT_SHA256` ve sabit `LANU_OTA_MANIFEST_URL` **Variables**. P-256 sunucu anahtarları, FCM servis hesabı, Android imzalama şifreleri ve .jks kesinlikle Git geçmişine veya sohbete yazılmaz. Dış sunucu anahtarı/cihaz test kanıtı görülmeden üretim onayı verilmez.
+
+**Puan kapısı:** Üretim 13–14 notu yalnız bu kabul maddeleri gerçek kanıtla kapandığında geçerli; CI başarısı ve PR sayısı tek başına puan artışı değildir.
