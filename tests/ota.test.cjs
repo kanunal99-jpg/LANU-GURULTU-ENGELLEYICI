@@ -31,8 +31,9 @@ test('APK must pass SHA-256, package, signing-certificate and higher-code checks
   assert.match(java,/MessageDigest\.isEqual/);
   assert.match(java,/validatePackage\(tmp,next\.code\)/);
   assert.match(java,/archive\.packageName/);
-  assert.match(java,/archive\.signatures/);
-  assert.match(java,/sig\.toByteArray\(\),existing\.toByteArray\(\)/);
+  assert.match(java,/GET_SIGNING_CERTIFICATES/);
+  assert.match(java,/archive\.signingInfo\.getApkContentsSigners\(\)/);
+  assert.match(java,/sig\.toByteArray\(\),currentSigner\.toByteArray\(\)/);
   assert.match(java,/code<=installedCode\(\)/);
   assert.match(java,/MAX_APK/);
   assert.match(java,/OTA_REPO_PATH/);
@@ -46,4 +47,26 @@ test('installer requires system consent and shares only scoped cache file',()=>{
   assert.match(manifest,/android:exported="false"/);
   const xml=fs.readFileSync('app/src/main/res/xml/update_paths.xml','utf8');
   assert.match(xml,/<cache-path[^>]+path="updates\/"/);
+});
+
+test('one-button Android update keeps the verified file after unknown-source settings relocks the PIN',()=>{
+  const main=fs.readFileSync('app/src/main/java/com/lanu/sesli/MainActivity.java','utf8');
+  assert.match(main,/void downloadAndInstall\(\)/);
+  assert.match(lens,/window\.LanuUpdate\.downloadAndInstall\(\)/);
+  assert.match(java,/void downloadAndInstall\(\)\{download\(true\);\}/);
+  assert.match(java,/if\(installAfterVerification\)install\(\);/);
+  assert.match(java,/final Candidate previous = latest/);
+  assert.match(java,/final File previousApk = verified/);
+  assert.match(java,/sameCandidate\(previous,candidate\)/);
+  assert.match(java,/void info\(\) \{/);
+  assert.match(java,/if \(readyForInstall\(\)\) emit\("ready"/);
+  assert.match(java,/if\(awaitingInstallPermission&&activity\.getPackageManager\(\)\.canRequestPackageInstalls\(\)\)/);
+  assert.match(html,/Yeni sürümü indir ve güncelle/);
+});
+test('version pinning prevents a remote older APK from being installed',()=>{
+  assert.match(java,/latest\.code > installedCode\(\)/);
+  assert.match(java,/candidate\.code>installedCode\(\)/);
+  assert.match(java,/code!=wantedCode\|\|code<=installedCode\(\)/);
+  assert.match(java,/proposed\.length!=existing\.length/);
+  assert.match(java,/Signature\[\] proposed/);
 });
