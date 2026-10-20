@@ -74,13 +74,18 @@ final class LanuUpdater {
             j.put("message",message);
             j.put("version",installedVersion());
             j.put("versionCode",installedCode());
-            j.put("configured",!BuildConfig.OTA_MANIFEST_URL.isEmpty());
+            j.put("configured",productionOtaConfigured());
             if(latest!=null)j.put("availableVersion",latest.version);
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
+    boolean productionOtaConfigured() {
+        // A debug/unpinned build is never allowed to advertise production OTA.
+        return !BuildConfig.DEBUG && BuildConfig.OTA_RELEASE_CERT_SHA256.matches("[0-9a-f]{64}")
+                && isFeedUrl(BuildConfig.OTA_MANIFEST_URL);
+    }
     private boolean readyForInstall() {
-        return latest != null && latest.code > installedCode()
+        return productionOtaConfigured() && latest != null && latest.code > installedCode()
                 && verified != null && verified.isFile() && verified.length() == latest.size;
     }
     private static boolean sameCandidate(Candidate a, Candidate b) {
@@ -88,10 +93,18 @@ final class LanuUpdater {
                 && a.sha.equals(b.sha) && a.url.equals(b.url) && a.version.equals(b.version);
     }
     void info() {
+        if (!productionOtaConfigured()) {
+            emit("not_configured","Güvenli üretim imzası henüz yapılandırılmadı. OTA bu APK için kapalı.");
+            return;
+        }
         if (readyForInstall()) emit("ready","Önceden doğrulanmış güncelleme hazır. Kurulum için onayla.");
         else emit("info","Yüklü sürüm: "+installedVersion()+" (kod "+installedCode()+")");
     }
     void check(){
+        if(!productionOtaConfigured()) {
+            emit("not_configured","Sertifika parmak izi olmayan test APKsında OTA kapalı.");
+            return;
+        }
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         // Keep previously verified APK across tab changes and the Android
         // unknown-sources permission screen, which locks the private UI.
@@ -158,6 +171,10 @@ final class LanuUpdater {
     void download(){download(false);}
     void downloadAndInstall(){download(true);}
     private void download(boolean installAfterVerification){
+        if(!productionOtaConfigured()) {
+            emit("not_configured","Güvenli OTA yalnız doğrulanmış üretim APKsında kullanılabilir.");
+            return;
+        }
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         Candidate next=latest;
         if(next==null||next.code<=installedCode()){emit("error","Önce güncelleme denetimi yap.");return;}
@@ -222,6 +239,10 @@ final class LanuUpdater {
         });
     }
     void install(){
+        if(!productionOtaConfigured()) {
+            emit("not_configured","Üretim imzası olmadan güncelleme kurulamaz.");
+            return;
+        }
         if(!mayPromptUser())return; // Never launch from a locked/decoy screen.
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         if(!readyForInstall()){emit("error","Önce güncellemeyi indirip doğrula.");return;}

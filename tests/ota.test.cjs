@@ -135,3 +135,24 @@ test('production OTA cert validates both installed and downloaded APK',()=>{
   assert.ok(java.includes('wantedVersion.equals(archive.versionName)'));
   assert.ok(java.includes('u.getPort()!=443'));
 });
+
+test('debug and unpinned APKs cannot advertise update availability or install a cached package',()=>{
+  assert.match(java,/boolean productionOtaConfigured\(\)/);
+  assert.ok(java.includes('!BuildConfig.DEBUG && BuildConfig.OTA_RELEASE_CERT_SHA256.matches'));
+  assert.ok(java.includes('j.put("configured",productionOtaConfigured())'));
+  assert.ok(java.includes('return productionOtaConfigured() && latest != null'));
+  for(const method of ['void info()', 'void check()', 'private void download(boolean installAfterVerification)', 'void install()']){
+    const begin=java.indexOf(method);
+    assert.ok(begin!==-1,method);
+    assert.ok(java.slice(begin,begin+320).includes('!productionOtaConfigured()'),method);
+  }
+  const instrumentation=fs.readFileSync('app/src/androidTest/java/com/lanu/sesli/SmokeInstrumentation.java','utf8');
+  assert.ok(instrumentation.includes('BuildConfig.DEBUG && new LanuUpdater(target).productionOtaConfigured()'));
+});
+test('production release CI compares real signed binary against pinned public certificate before publishing',()=>{
+  const workflow=fs.readFileSync('.github/workflows/build.yml','utf8');
+  assert.ok(workflow.includes('apksigner" verify --print-certs dist/Lanu-Lens-2.0.10.apk'));
+  assert.ok(workflow.includes('"$actual" != "$expected"'));
+  assert.ok(workflow.includes('Refusing release.'));
+  assert.ok(workflow.indexOf('Refusing release.') < workflow.indexOf('Releases\'a APK ekle'));
+});
