@@ -119,19 +119,19 @@ test('manifest refresh bypasses stale intermediary caches',()=>{
   assert.match(java,/Pragma","no-cache"/);
 });
 
-test('OTA manifest URL is exactly pinned and update release tag binds version with versionCode',()=>{
-  assert.match(java,/return "https:\\/\\/raw\\.githubusercontent\\.com\\/kanunal99-jpg\\/LANU-LENS-OTA\\/main\\/latest\\.json"\\.equals\\(url\\)/);
-  assert.match(java,/isExpectedReleaseUrl\\(url,version,code\\)/);
-  assert.match(java,/OTA_REPO_PATH\\+"v"\\+version\\+"-build"\\+code/);
-  assert.match(java,/u\\.getQuery\\(\\)==null && u\\.getRef\\(\\)==null/);
+test('OTA manifest URL is pinned and update tag binds versionCode',()=>{
+  assert.ok(java.includes('"https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(url)'));
+  assert.ok(java.includes('isExpectedReleaseUrl(url,version,code)'));
+  assert.ok(java.includes('OTA_REPO_PATH+"v"+version+"-build"+code'));
+  assert.ok(java.includes('u.getQuery()==null && u.getRef()==null'));
 });
-test('production OTA certificate is pinned and verified against both installed and proposed APK',()=>{
-  assert.match(gradle,/LANU_RELEASE_CERT_SHA256/);
-  assert.match(gradle,/OTA_RELEASE_CERT_SHA256/);
-  assert.match(java,/BuildConfig\\.OTA_RELEASE_CERT_SHA256/);
-  assert.match(java,/MessageDigest\\.getInstance\\("SHA-256"\\)\\.digest\\(sig\\.toByteArray\\(\\)\\)/);
-  assert.match(java,/for\\(Signature sig:proposed\\)/);
-  assert.match(java,/for\\(Signature sig:existing\\)/);
-  assert.match(java,/wantedVersion\\.equals\\(archive\\.versionName\\)/);
-  assert.match(java,/u\\.getPort\\(\\)!=443/);
+test('production OTA cert validates both installed and downloaded APK',()=>{
+  assert.ok(gradle.includes('LANU_RELEASE_CERT_SHA256'));
+  assert.ok(gradle.includes('OTA_RELEASE_CERT_SHA256'));
+  assert.ok(java.includes('BuildConfig.OTA_RELEASE_CERT_SHA256'));
+  assert.ok(java.includes('MessageDigest.getInstance("SHA-256").digest(sig.toByteArray())'));
+  assert.ok(java.includes('for(Signature sig:proposed)'));
+  assert.ok(java.includes('for(Signature sig:existing)'));
+  assert.ok(java.includes('wantedVersion.equals(archive.versionName)'));
+  assert.ok(java.includes('u.getPort()!=443'));
 });
