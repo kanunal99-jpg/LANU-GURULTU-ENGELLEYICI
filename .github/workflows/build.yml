@@ -34,8 +34,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Arama yaşam döngüsü testleri
         run: node --test tests/*.test.cjs
-      - name: OTA yayıncısı sözdizimi
-        run: bash -n scripts/publish-ota.sh
+      - name: OTA ve APK doğrulayıcı sözdizimi
+        run: bash -n scripts/publish-ota.sh scripts/verify-release-apk.sh
       - name: Yerel PeerJS bütünlüğü
         run: echo 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5  app/src/main/assets/vendor/peerjs.min.js' | sha256sum -c -
       - name: İki istemci WebRTC ses bağlantısı
@@ -158,6 +158,10 @@ jobs:
             echo "Production APK signer verified against the configured fingerprint."
           fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.10.apk > dist/APK-BILGILERI.txt
+          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then mode=PRODUCTION; else mode=DEBUG; fi
+          bash scripts/verify-release-apk.sh dist/Lanu-Lens-2.0.10.apk "$mode" "$GITHUB_RUN_NUMBER" "2.0.10" > dist/APK-IMZA-DURUMU.txt
+          cat dist/APK-IMZA-DURUMU.txt
           unzip -l dist/Lanu-Lens-2.0.10.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
           cd dist
           sha256sum Lanu-Lens-2.0.10.apk > SHA256SUMS.txt
@@ -185,7 +189,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v2.0.10-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.10.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
+          gh release create "v2.0.10-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.10.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt dist/APK-IMZA-DURUMU.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Lanu Lens 2.0.10" --notes-file docs/RELEASE-NOTES.md
       - name: OTA herkese açık sadece-APK dağıtımı
