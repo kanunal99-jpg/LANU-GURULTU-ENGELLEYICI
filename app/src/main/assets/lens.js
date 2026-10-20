@@ -13,14 +13,33 @@
     if (!opened) return;
     $('callsPane').hidden = updates;
     $('updatesPane').hidden = !updates;
+    $('diagnosticsPane').hidden = true;
     $('callsTab').classList.toggle('active', !updates);
     $('updatesTab').classList.toggle('active', updates);
+    $('diagnosticsTab').classList.remove('active');
     $('callsTab').setAttribute('aria-selected', String(!updates));
     $('updatesTab').setAttribute('aria-selected', String(updates));
+    $('diagnosticsTab').setAttribute('aria-selected', 'false');
+    $('callsTab').tabIndex = updates ? -1 : 0;
+    $('updatesTab').tabIndex = updates ? 0 : -1;
+    $('diagnosticsTab').tabIndex = -1;
     if (updates && window.LanuUpdate) {
       window.LanuUpdate.info();
       window.LanuUpdate.check();
     }
+  }
+  function showDiagnostics() {
+    if (!opened) return;
+    $('callsPane').hidden = true;
+    $('updatesPane').hidden = true;
+    $('diagnosticsPane').hidden = false;
+    for (const id of ['callsTab','updatesTab','diagnosticsTab']) {
+      const selected = id === 'diagnosticsTab';
+      $(id).classList.toggle('active', selected);
+      $(id).setAttribute('aria-selected', String(selected));
+      $(id).tabIndex = selected ? 0 : -1;
+    }
+    if (window.LanuDiagnostics) window.LanuDiagnostics.render(document, window);
   }
   window.lanuUpdateEvent = event => {
     if (!opened || !event || typeof event.state !== 'string') return;
@@ -139,10 +158,11 @@
     dismissKeyboard();gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
     if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
     $('privateView').hidden=$('gate').hidden=true;$('codeChangeConfirm').hidden=true;$('cameraView').hidden=false;
-    $('callsPane').hidden=false;$('updatesPane').hidden=true;
-    $('callsTab').classList.add('active');$('updatesTab').classList.remove('active');
+    $('callsPane').hidden=false;$('updatesPane').hidden=true;$('diagnosticsPane').hidden=true;
+    $('callsTab').classList.add('active');$('updatesTab').classList.remove('active');$('diagnosticsTab').classList.remove('active');
+    $('callsTab').tabIndex=0;$('updatesTab').tabIndex=$('diagnosticsTab').tabIndex=-1;
     $('updatesTab').textContent='Güncelleme Kontrol';
-    $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');
+    $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
@@ -195,7 +215,7 @@
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
   window.lanuForeground=()=>{suspended=false;};
   window.lanuBackground=()=>{entries.forEach(entry=>entry.cancel());suspended=true;lock(false);};
-  window.lanuBack=()=>{if(opened&&!$('updatesPane').hidden){showPrivateTab(false);return true;}if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
+  window.lanuBack=()=>{if(opened&&(!$('updatesPane').hidden||!$('diagnosticsPane').hidden)){showPrivateTab(false);return true;}if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
   entries = Array.from(document.querySelectorAll('[data-lens-entry]')).map(element => LensEntry.attach(element, () => gate(), {
     enabled: () => !$('cameraView').hidden && $('gate').hidden && $('photoView').hidden && !document.hidden
   }));
@@ -214,6 +234,25 @@
   $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{dismissKeyboard();gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
   $('callsTab').addEventListener('click',()=>showPrivateTab(false));
   $('updatesTab').addEventListener('click',()=>showPrivateTab(true));
+  $('diagnosticsTab').addEventListener('click',showDiagnostics);
+  $('refreshDiagnostics').addEventListener('click',()=>{if(opened&&window.LanuDiagnostics)window.LanuDiagnostics.render(document,window);});
+  ['online','offline'].forEach(name=>window.addEventListener(name,()=>{
+    if(opened&&!$('diagnosticsPane').hidden&&window.LanuDiagnostics)window.LanuDiagnostics.render(document,window);
+  }));
+  // WAI-ARIA tablist: arrows/Home/End change the active panel and keyboard focus.
+  const tabs=['callsTab','updatesTab','diagnosticsTab'];
+  $('privateView').querySelector('.lens-tabs').addEventListener('keydown',event=>{
+    if(!opened||!tabs.includes(event.target.id))return;
+    let index=tabs.indexOf(event.target.id);
+    if(event.key==='ArrowRight')index=(index+1)%tabs.length;
+    else if(event.key==='ArrowLeft')index=(index+tabs.length-1)%tabs.length;
+    else if(event.key==='Home')index=0;
+    else if(event.key==='End')index=tabs.length-1;
+    else return;
+    event.preventDefault();
+    $(tabs[index]).click();
+    $(tabs[index]).focus();
+  });
   $('checkUpdates').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.check();});
   $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.downloadAndInstall();});
   $('installUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.install();});
