@@ -28,7 +28,7 @@
     if (!pane || pane.hidden || (doc.getElementById('privateView') && doc.getElementById('privateView').hidden)) return false;
     const results = snapshot(env), container = doc.getElementById('diagnosticsResults');
     if (!container) return false;
-    container.replaceChildren();
+    container.textContent = '';
     for (const [key, labels] of Object.entries(STATUSES)) {
       const line = doc.createElement('li');
       line.className = 'diagnostic-row';
