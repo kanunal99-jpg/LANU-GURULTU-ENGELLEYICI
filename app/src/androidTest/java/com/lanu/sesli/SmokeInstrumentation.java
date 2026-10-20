@@ -48,6 +48,7 @@ public class SmokeInstrumentation extends Instrumentation {
             require(web, "typeof window.LanuAuthProtocol.generate === 'function' && typeof window.LanuAuthProtocol.verifyInvite === 'function'", "P-256 identity protocol available");
             require(web, "typeof window.LanuEncryptedTransfer.exportBackup === 'function' && typeof window.LanuEncryptedTransfer.importBackup === 'function'", "Encrypted user backup protocol available but not automatically invoked");
             require(web, "typeof window.LanuDeviceKeyStore.create === 'function' && typeof indexedDB.open === 'function'", "Local CryptoKey store available; enrollment stays explicit");
+            require(web, "typeof window.LanuBrokerClient.create === 'function'", "Dormant HTTPS broker client present, never auto-enrolled");
             require(web, "document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]') !== null", "CSP present");
             require(web, "document.getElementById('answerBtn').hidden && document.getElementById('hangBtn').hidden", "Idle controls");
             require(web, "(window.lanuPause('Smoke test'), document.getElementById('callBtn').disabled)", "Pause disables dialing");
