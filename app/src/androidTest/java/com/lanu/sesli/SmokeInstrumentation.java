@@ -41,6 +41,8 @@ public class SmokeInstrumentation extends Instrumentation {
             require(web, "location.origin === 'https://appassets.androidplatform.net'", "Secure asset origin");
             require(web, "!!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function'", "Microphone API available");
             require(web, "typeof window.LanuAudio.setCallActive === 'function'", "Trusted native bridge");
+            require(web, "typeof window.LanuAuthProtocol.generate === 'function' && typeof window.LanuAuthProtocol.verifyInvite === 'function'", "P-256 identity protocol available");
+            require(web, "typeof window.LanuDeviceKeyStore.create === 'function' && typeof indexedDB.open === 'function'", "Local CryptoKey store available; enrollment stays explicit");
             require(web, "document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]') !== null", "CSP present");
             require(web, "document.getElementById('answerBtn').hidden && document.getElementById('hangBtn').hidden", "Idle controls");
             require(web, "(window.lanuPause('Smoke test'), document.getElementById('callBtn').disabled)", "Pause disables dialing");
