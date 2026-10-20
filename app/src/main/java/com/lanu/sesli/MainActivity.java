@@ -51,7 +51,9 @@ public class MainActivity extends Activity {
     private static final String TAG = "LANU";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/index.html";
-    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFY = 14;
+    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFY = 14,
+            SAVE_BACKUP = 15, LOAD_BACKUP = 16;
+    private static final int MAX_BACKUP_BYTES = 400 * 1024;
     private static final String CALL_CHANNEL = "lanu-call-v1";
     private static final String OPEN_INCOMING = "com.lanu.sesli.OPEN_INCOMING";
     private static final int INCOMING_NOTIFICATION = 2901;
@@ -63,7 +65,8 @@ public class MainActivity extends Activity {
     private Vibrator vibrator;
     private ToneGenerator ringback;
     private boolean ringing, ringingBack, incomingAlert;
-    private byte[] photoBytes;
+    private byte[] photoBytes, backupBytes;
+    private boolean backupPicking;
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private final Runnable repeatRing = new Runnable() {
         @Override public void run() {
@@ -144,6 +147,7 @@ public class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
         web.addJavascriptInterface(new UpdateBridge(), "LanuUpdate");
+        web.addJavascriptInterface(new BackupBridge(), "LanuBackup");
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap favicon) {
                 // A new document must never inherit native PIN authorization
@@ -245,6 +249,49 @@ public class MainActivity extends Activity {
     void updateStatus(org.json.JSONObject data) {
         if (!canShowUpdater()) return;
         web.evaluateJavascript("window.lanuUpdateEvent && window.lanuUpdateEvent(" + data.toString() + ")", null);
+    }
+
+    /** A scoped Storage Access Framework bridge: no file paths, permissions,
+     * PINs or backup passphrases pass into native storage or logs. */
+    private final class BackupBridge {
+        @JavascriptInterface public void exportEncrypted(String json) {
+            main.post(() -> {
+                if(!canShowUpdater() || backupBytes != null || backupPicking ||
+                   json == null || json.length()>MAX_BACKUP_BYTES ||
+                   !json.startsWith("{")) { backupResult("save",false);return; }
+                try{
+                    backupBytes=json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    if(backupBytes.length>MAX_BACKUP_BYTES)throw new IllegalArgumentException("size");
+                    Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                            .addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
+                            .putExtra(Intent.EXTRA_TITLE,"Lanu-Lens-Sifreli-Yedek-"+System.currentTimeMillis()+".json");
+                    startActivityForResult(intent,SAVE_BACKUP);
+                }catch(RuntimeException e){backupBytes=null;backupResult("save",false);}
+            });
+        }
+        @JavascriptInterface public void importEncrypted() {
+            main.post(() -> {
+                if(destroyed || !visible || privateUnlocked || backupPicking || backupBytes!=null) {
+                    backupResult("load",false);return;
+                }
+                try {
+                    backupPicking=true;
+                    Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                            .addCategory(Intent.CATEGORY_OPENABLE).setType("application/json");
+                    startActivityForResult(intent,LOAD_BACKUP);
+                }catch(RuntimeException e){backupPicking=false;backupResult("load",false);}
+            });
+        }
+    }
+    private void backupResult(String action,boolean ok) {
+        if(!destroyed && web!=null)web.evaluateJavascript(
+                "window.lanuBackupResult && window.lanuBackupResult("+
+                org.json.JSONObject.quote(action)+","+ok+")",null);
+    }
+    private void backupLoaded(String encryptedJson) {
+        if(!destroyed && web!=null)web.evaluateJavascript(
+                "window.lanuBackupLoaded && window.lanuBackupLoaded("+
+                org.json.JSONObject.quote(encryptedJson)+")",null);
     }
 
     private final class AudioBridge {
@@ -396,6 +443,44 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int code,int result,Intent data) {
         super.onActivityResult(code,result,data);
+        if(code==SAVE_BACKUP){
+            final byte[] bytes=backupBytes;backupBytes=null;
+            if(result!=RESULT_OK || data==null || data.getData()==null || bytes==null){
+                backupResult("save",false);return;
+            }
+            final Uri destination=data.getData();
+            files.execute(()->{
+                boolean ok=false;
+                try(OutputStream out=getContentResolver().openOutputStream(destination,"wt")){
+                    if(out!=null){out.write(bytes);out.flush();ok=true;}
+                }catch(Exception exception){Log.w(TAG,"Encrypted backup export failed");}
+                final boolean saved=ok;main.post(()->backupResult("save",saved));
+            });
+            return;
+        }
+        if(code==LOAD_BACKUP){
+            backupPicking=false;
+            if(result!=RESULT_OK || data==null || data.getData()==null){
+                backupResult("load",false);return;
+            }
+            final Uri source=data.getData();
+            files.execute(()->{
+                String serialized=null;
+                try(java.io.InputStream stream=getContentResolver().openInputStream(source)){
+                    if(stream==null)throw new IllegalStateException("Missing encrypted file");
+                    java.io.ByteArrayOutputStream resultBytes=new java.io.ByteArrayOutputStream();
+                    byte[] block=new byte[8192];int n;
+                    while((n=stream.read(block))!=-1){
+                        if(resultBytes.size()+n>MAX_BACKUP_BYTES)throw new IllegalArgumentException("Backup too large");
+                        resultBytes.write(block,0,n);
+                    }
+                    serialized=new String(resultBytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+                }catch(Exception exception){Log.w(TAG,"Encrypted backup import failed");}
+                final String file=serialized;
+                main.post(()->{if(file!=null)backupLoaded(file);else backupResult("load",false);});
+            });
+            return;
+        }
         if(code!=SAVE_PHOTO)return;
         final byte[] bytes=photoBytes;photoBytes=null;
         if(result!=RESULT_OK||data==null||data.getData()==null||bytes==null){photoResult(false);return;}
@@ -515,13 +600,13 @@ public class MainActivity extends Activity {
         privateUnlocked = false;
         updateIncomingAlert(false);
         ring(false); ringBack(false); setActive(false);
-        files.shutdown(); photoBytes=null;
+        files.shutdown(); photoBytes=null;backupBytes=null;backupPicking=false;
         if (updater != null) updater.close();
         destroyed = true;
         if (pendingMicrophone != null) { pendingMicrophone.deny(); pendingMicrophone = null; }
         if (pendingCamera != null) { pendingCamera.deny(); pendingCamera = null; }
         if (audio != null) audio.unregisterAudioDeviceCallback(devices);
-        if (web != null) { web.removeJavascriptInterface("LanuUpdate"); web.removeJavascriptInterface("LanuAudio"); web.destroy(); web = null; }
+        if (web != null) { web.removeJavascriptInterface("LanuUpdate"); web.removeJavascriptInterface("LanuBackup"); web.removeJavascriptInterface("LanuAudio"); web.destroy(); web = null; }
         main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
