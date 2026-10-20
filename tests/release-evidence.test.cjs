@@ -18,7 +18,7 @@ test('release evidence proves four uploaded assets, expected commit and the real
   assert.throws(()=>verifyReleaseEvidence({...release,assets:release.assets.slice(0,3)},dir,commit),/asset count/);
   assert.throws(()=>verifyReleaseEvidence({...release,assets:[...release.assets,{name:'other',size:1}]},dir,commit),/asset count/);
   assert.throws(()=>verifyReleaseEvidence({...release,assets:release.assets.map(x=>x.name===name?{...x,size:x.size-1}:x)},dir,commit),/truncated/);
-  fs.writeFileSync(path.join(dir,'SHA256SUMS.txt'),'0'.repeat(64)+'  '+name);
+  fs.writeFileSync(path.join(dir,'SHA256SUMS.txt'),'0'.repeat(64)+'  '+name+'\n');
   assert.throws(()=>verifyReleaseEvidence(release,dir,commit),/SHA256/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
