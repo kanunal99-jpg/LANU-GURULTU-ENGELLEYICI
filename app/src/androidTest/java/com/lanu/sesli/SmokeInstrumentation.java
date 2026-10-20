@@ -35,7 +35,11 @@ public class SmokeInstrumentation extends Instrumentation {
                 if (loaded) break;
                 Thread.sleep(200);
             }
-            if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
+            if (!loaded) throw new AssertionError("Bundled JavaScript did not start: "
+                + js(web,"JSON.stringify({ready:document.readyState,url:location.href,peer:typeof Peer,"
+                + "pause:typeof window.lanuPause,lens:typeof window.LanuLens,"
+                + "crypto:typeof window.crypto,agent:navigator.userAgent,"
+                + "scripts:Array.from(document.scripts).map(s=>[s.src,s.readyState])})"));
             verifyOtaDigestRejectsTampering(target);
             verifyPinnedSignerFailClosed();
             assertUpdaterGate(target, false, "Locked camera must block native OTA");
@@ -208,7 +212,18 @@ public class SmokeInstrumentation extends Instrumentation {
         long probe=SystemClock.uptimeMillis();
         pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(50);
         pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
-        JSONArray observed=new JSONArray(js(web,"(()=>{const t=window.__entryTrace.find(e=>e.type==='touchstart');return t&&t.touches?t.touches[0]:null;})()"));
+        // Chrome 74 can expose native POINTER events without a touchstart.
+        // Calibrate against whichever real OS event actually reached WebView;
+        // never continue on null or manufacture a DOM touch.
+        String observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
+                +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
+                +"if(t)return t.touches[0];"
+                +"const p=events.find(e=>e.type==='pointerdown');return p?[p.x,p.y]:null;})()");
+        if(observedJson==null || "null".equals(observedJson))
+            throw new AssertionError("Real Android touch calibration failed: "
+                    + js(web,"JSON.stringify({focus:document.hasFocus(),trace:window.__entryTrace,"
+                    +"target:window.__entryTarget,viewport:[innerWidth,innerHeight]})"));
+        JSONArray observed=new JSONArray(observedJson);
         point[0]+=(bounds.optDouble(0)-observed.optDouble(0))*point[2];
         point[1]+=(bounds.optDouble(1)-observed.optDouble(1))*point[2];
         js(web,"window.__entryTrace=[]");
@@ -223,7 +238,13 @@ public class SmokeInstrumentation extends Instrumentation {
     private void pointer(long down,int action,float x,float y) {
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-        try{sendPointerSync(event);}finally{event.recycle();}
+        try{
+            // Instrumentation.sendPointerSync can cross the Android 10 UID
+            // boundary and throw INJECT_EVENTS. UiAutomation is Android's
+            // sanctioned OS-level automation channel; not a DOM fake.
+            if(!getUiAutomation().injectInputEvent(event,true))
+                throw new AssertionError("Android denied real touch input");
+        }finally{event.recycle();}
     }
     private String js(WebView view, String expression) throws Exception {
         CountDownLatch done = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();
