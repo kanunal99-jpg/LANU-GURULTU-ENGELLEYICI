@@ -69,6 +69,7 @@ public class SmokeInstrumentation extends Instrumentation {
             js(web,"document.getElementById('updatesTab').click()");
             require(web,"!document.getElementById('updatesPane').hidden && document.getElementById('callsPane').hidden","Update tab opens behind PIN");
             require(web,"document.getElementById('checkUpdates') !== null && document.getElementById('downloadUpdate') !== null && document.getElementById('installUpdate') !== null","OTA controls exist");
+            Thread.sleep(450); // Allow native version-check messages to settle before UI state assertions.
             js(web,"window.lanuUpdateEvent({state:'available',version:'2.0.6',versionCode:99,message:'Update test'})");
             require(web,"!document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden","New build offers one-tap download and install");
             js(web,"window.lanuUpdateEvent({state:'ready',version:'2.0.6',versionCode:99,message:'Verified'})");
