@@ -29,7 +29,7 @@ test('OTA is opt-in and private repo secrets are never embedded in the app',()=>
 test('APK must pass SHA-256, package, signing-certificate and higher-code checks',()=>{
   assert.match(java,/MessageDigest\.getInstance\("SHA-256"\)/);
   assert.match(java,/MessageDigest\.isEqual/);
-  assert.match(java,/validatePackage\(tmp,next\.code\)/);
+  assert.match(java,/validatePackage\(tmp,next\.code,next\.version\)/);
   assert.match(java,/archive\.packageName/);
   assert.match(java,/GET_SIGNING_CERTIFICATES/);
   assert.match(java,/archive\.signingInfo\.getApkContentsSigners\(\)/);
@@ -82,7 +82,7 @@ test('installer re-verifies the on-disk APK when the user taps install',()=>{
   assert.match(java,/void openInstallerAfterValidation\(\)\s*\{/);
   assert.match(java,/new java\.io\.FileInputStream\(file\)/);
   assert.match(java,/APK changed after verification/);
-  assert.match(java,/validatePackage\(file,candidate\.code\)/);
+  assert.match(java,/validatePackage\(file,candidate\.code,candidate\.version\)/);
   assert.ok(java.indexOf('validatePackage(file,candidate.code,candidate.version)')<java.indexOf('openInstallerAfterValidation();'));
   assert.match(java,/verified!=file/);
   assert.match(java,/busy=true;\s*emit\("verifying"/);
