@@ -13,11 +13,12 @@
    if(typeof fetchApi!=='function'||!(cryptoApi && cryptoApi.subtle)||!indexedDb||!AUTH||!KEY_STORE)
      throw Error('Secure browser and device identity required');
    const store=KEY_STORE.create(indexedDb);
-   let token=null,deviceId=null,sessionExpiresAt=0;
-   function expire(){token=null;deviceId=null;sessionExpiresAt=0;}
+   let token=null,deviceId=null,sessionExpiresAt=0,authEpoch=0;
+   function expire(){authEpoch++;token=null;deviceId=null;sessionExpiresAt=0;}
    async function request(path,body,bearer){
      if(!/^\/v1\/[a-z/]+$/.test(path))throw Error('Invalid broker API route');
      if(bearer)ensure();
+     const requestEpoch=authEpoch,requestToken=bearer?token:null;
      const url=baseUrl.slice(0,-1)+path;
      const res=await fetchApi(url,{
        method:'POST',mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
@@ -30,6 +31,9 @@
        throw Error('Secure broker request was rejected');
      }
      const raw=await res.text();
+     // A response received after explicit logout/lock must not be consumed.
+     if(bearer && (requestEpoch!==authEpoch || requestToken!==token || clock()>=sessionExpiresAt))
+       throw Error('Authentication required');
      if(typeof raw!=='string'||raw.length>16*1024)throw Error('Broker response too large');
      const data=JSON.parse(raw);
      if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Invalid broker response');
@@ -55,6 +59,7 @@
    }
    async function signIn(){
      expire();
+     const attempt=authEpoch;
      const identity=await store.load();
      if(!identity||(!identity.privateKey || identity.privateKey.extractable!==false) ||
         !id.test(identity.deviceId))throw Error('Device enrollment missing');
@@ -64,6 +69,7 @@
      const result=await request('/v1/session/complete',{deviceId:identity.deviceId,nonce:challenge.nonce,signature},false);
      if(typeof result.token!=='string'||!id.test(result.token)||result.ttlSeconds!==900)
        throw Error('Invalid session');
+     if(attempt!==authEpoch)throw Error('Sign-in cancelled');
      token=result.token;deviceId=identity.deviceId;
      sessionExpiresAt=clock()+result.ttlSeconds*1000;
      return identity.deviceId;
