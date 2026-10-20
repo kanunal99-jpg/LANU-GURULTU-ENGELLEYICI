@@ -199,3 +199,26 @@ GitHub private repo → Settings → Secrets and variables → Actions:
 `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD`, `LANU_OTA_PUBLISH_TOKEN` **Secrets**; `LANU_RELEASE_CERT_SHA256` ve sabit `LANU_OTA_MANIFEST_URL` **Variables**. P-256 sunucu anahtarları, FCM servis hesabı, Android imzalama şifreleri ve .jks kesinlikle Git geçmişine veya sohbete yazılmaz. Dış sunucu anahtarı/cihaz test kanıtı görülmeden üretim onayı verilmez.
 
 **Puan kapısı:** Üretim 13–14 notu yalnız bu kabul maddeleri gerçek kanıtla kapandığında geçerli; CI başarısı ve PR sayısı tek başına puan artışı değildir.
+
+---
+
+## 20.10.2026 — Kalıcı OTA imzasına veri kayıpsız geçiş: şifreli aktarım (PR #46)
+
+### Neden kritik?
+Eski **debug imzalı** APK'nın uygulama verileri, farklı kalıcı **production** sertifikasıyla imzalanmış APK'nın Android'de üzerine kurulmasıyla korunarak taşınamaz. Veri silerek çözüm önerilemez. **Kullanıcı kontrollü, şifreli dışa aktarma/geri yükleme** gerçek cihaz doğrulaması olmadan üretim OTA kabulü kapalıdır.
+
+### Şimdi kodlanan aşama
+- [PR #46](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/46): `encrypted-transfer.js` taşıma biçimi, ayrı 12–128 karakterli yedek parolası ve PBKDF2-SHA256 (310.000 tur) üzerinden AES-256-GCM salt/IV ile yeniden şifreleme; içeride PIN ile şifreli kasa kaydı ve 6 haneli yönlendirme kimliğinin tam korunması.
+- Export öncesi mevcut PIN'le kayıt doğrulanır. Import öncesi hem yedek parolası hem orijinal PIN ile v1 AES-GCM doğrulanır; bozuk/büyük/ek alanlı dosya reddedilir.
+- Hedef cihazda `lens-vault-v1` varsa **geri yükleme kesinlikle üzerine yazmaz**; hatalı/kapasite dolu depolamada yönlendirme kodu geri alınır. Ham PIN, rehber isimleri ve yönlendirme kimliği şifrelenmemiş yedeğe yazılmaz.
+- Testler: veri kayıpsız round-trip, yanlış PIN/parola, var olan kasa reddi, bozulmuş/aşırı büyük yedek, kota hatası. WebView smoke modülü varlığını denetler.
+- **Yalnız kriptografik modül ve testler.** Dosya oluştur/ seç Android SAF arayüzü henüz bağlanmadı; uçtan uca gerçek telefonla export/import **yapılmadı**, yedek özelliği kullanıcıya hazır **değil**.
+
+### Devam için kapılar
+- [ ] Android `ACTION_CREATE_DOCUMENT` ve `ACTION_OPEN_DOCUMENT`, 400 KiB güvenli boyut, MIME ve URI doğrulama, uygulama private PIN native bridge, kaydetmede `fsync`/kapanma güvenliği, iptal/arka plan kilidi.
+- [ ] Kullanıcı için ayrı yedek parolası ekranı ve geri yükleme öncesi açık onay; PIN/rehber asla loglanmaz.
+- [ ] Restore, yeni kurulumda otomatik PIN oluşturulmadan önce erişilebilir olacak; var olan kasanın üzerine yazılması varsayılan olarak yasak kalır.
+- [ ] Eski debug APK'dan yedek çıkış → farklı imzalı yeni APK → aynı PIN/rehber/kişisel kod ile geri açılış, iki gerçek cihaz ve force-stop/iptal/sahte dosya regresyonu.
+- [ ] P-256 **nonextractable** cihaz özel anahtarı taşınmaz: güvenilir sunucu üstünden ayrı yeni cihaz enrollment ve eski cihaz iptali gerekir.
+
+**Bu PR üretim puanını artırmaz.** OTA 14/15 için kalıcı anahtar + public mirror + gerçek dosya aktarımı ve iki cihaz kabul kanıtı hâlâ gerekir.
