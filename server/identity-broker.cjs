@@ -50,6 +50,10 @@ class Broker {
     return this.challenge('LOGIN',id);
   }
   challenge(purpose,id,publicKeyHex=null){
+    // Old, unused challenge records must not permanently exhaust the service.
+    for(const [k,record] of this.challenges) {
+      if(record.expiresAt<this.clock())this.challenges.delete(k);
+    }
     if(this.challenges.size>=1024)throw Error('Challenge capacity exhausted');
     const nonce=this.random(), expiresAt=this.clock()+60000;
     this.challenges.set(nonce,{purpose,id,publicKeyHex,expiresAt});
@@ -74,6 +78,7 @@ class Broker {
     if(challenge.publicKeyHex!==raw || this.devices.has(id))throw Error('Enrollment denied');
     const key=await this.crypto.subtle.importKey('raw',unhex(raw),{name:'ECDSA',namedCurve:'P-256'},true,['verify']);
     if(!await this.verifyProof(key,signature,'ENROLL',id,nonce))throw Error('Enrollment denied');
+    if(this.devices.size>=10000)throw Error('Registration capacity exhausted');
     this.devices.set(id,{publicKey:key,revoked:false});
     return id;
   }
@@ -83,6 +88,8 @@ class Broker {
     if(!device||device.revoked||!await this.verifyProof(device.publicKey,signature,'LOGIN',id,nonce))
       throw Error('Authentication denied');
     const token=this.random(32);
+    for(const [old,session] of this.sessions)if(session.expiresAt<this.clock())this.sessions.delete(old);
+    if(this.sessions.size>=10000)throw Error('Session capacity exhausted');
     this.sessions.set(token,{id,expiresAt:this.clock()+15*60000});
     return token;
   }
