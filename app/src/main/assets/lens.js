@@ -169,7 +169,7 @@
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();
-    for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase'])$(id).value='';
+    for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
     $('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
@@ -267,7 +267,12 @@
     if(!opened || !vault || !vault.data || !window.LanuEncryptedTransfer ||
        !window.LanuBackup || typeof window.LanuBackup.exportEncrypted!=='function')return;
     const pin=$('exportPin').value,passphrase=$('exportPassphrase').value;
-    $('exportPin').value=$('exportPassphrase').value='';
+    const confirmed=$('exportPassphraseConfirm').value;
+    $('exportPin').value=$('exportPassphrase').value=$('exportPassphraseConfirm').value='';
+    if(passphrase!==confirmed || passphrase.length<12) {
+      $('exportStatus').textContent='Yedek parolaları aynı olmalı ve en az 12 karakter içermeli. Yeni dosya oluşturulmadı.';
+      return;
+    }
     const token=gateEpoch;
     $('exportBackup').disabled=true;$('exportStatus').textContent='Şifreli dosya oluşturuluyor…';
     try{
@@ -275,7 +280,12 @@
       if(!opened || token!==gateEpoch || document.hidden)throw Error('Cancelled');
       const encrypted=await window.LanuEncryptedTransfer.exportBackup({storage:storage(),
         crypto:window.crypto,pin,passphrase});
-      if(!opened || token!==gateEpoch || document.hidden)throw Error('Cancelled');
+      // A user losing the newly exported file's password would lose access
+      // after debug→release uninstall. Verify the encrypted output before IO.
+      const verified=await window.LanuEncryptedTransfer.verifyBackup({
+        crypto:window.crypto,pin,passphrase,serialized:encrypted
+      });
+      if(!verified || !opened || token!==gateEpoch || document.hidden)throw Error('Cancelled');
       window.LanuBackup.exportEncrypted(encrypted);
       $('exportStatus').textContent='Android dosya seçicisinden yedeği kaydedeceğin konumu seç.';
     }catch(_){
