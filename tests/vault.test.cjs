@@ -66,3 +66,43 @@ test('cancelling a PIN change during encryption preserves the previous PIN and c
  await pending.unlock('741963');
  assert.equal(pending.data.contacts.length,1);
 });
+
+test('a bad PIN locks any previously held key and blocks stale decrypted contacts',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);
+ await v.create('741963');v.data.contacts.push({code:'654321',name:'Private'});await v.write(v.data);
+ await assert.rejects(v.unlock('111111'));
+ assert.equal(v.key,null);assert.equal(v.salt,null);assert.equal(v.data,null);
+ await v.unlock('741963');assert.equal(v.data.contacts[0].name,'Private');
+});
+test('malformed or oversized ciphertext envelopes fail before PBKDF2 and preserve the record',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);await v.create('741963');
+ const previous=db.getItem('lens-vault-v1');v.lock();
+ for(const changes of [{iv:'AA=='},{salt:'AA=='},{cipher:'AA=='},{v:2},{cipher:'a'.repeat(262145)}, {salt:'!!!'}]){
+  const corrupted=JSON.stringify({...JSON.parse(previous),...changes});
+  db.setItem('lens-vault-v1',corrupted);
+  await assert.rejects(v.unlock('741963'));
+  assert.equal(v.key,null);assert.equal(db.getItem('lens-vault-v1'),corrupted);
+ }
+ db.setItem('lens-vault-v1',previous);await v.unlock('741963');
+});
+test('invalid contacts or malicious field types never overwrite a valid encrypted vault',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);await v.create('741963');
+ const original=db.getItem('lens-vault-v1');
+ const invalid=[
+  {...v.data,contacts:[{code:'0'+'23456',name:'Invalid'}]},
+  {...v.data,contacts:[{code:'654321',name:'N'.repeat(41)}]},
+  {...v.data,contactsEnabled:'yes'},
+  {...v.data,contacts:Array.from({length:201},(_,i)=>({code:String(100000+i),name:'N'}))},
+ ];
+ for(const data of invalid) {
+  await assert.rejects(v.write(data));
+  assert.equal(db.getItem('lens-vault-v1'),original);
+ }
+ await v.unlock('741963');assert.equal(v.data.contacts.length,0);
+});
+test('v1 encrypted vault remains interoperable without schema reset',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);await v.create('741963');
+ const backup=db.getItem('lens-vault-v1');v.lock();
+ const other=new LensVault(db,webcrypto);await other.unlock('741963');assert.equal(db.getItem('lens-vault-v1'),backup);
+ assert.equal(other.data.incomingEnabled,true);
+});
