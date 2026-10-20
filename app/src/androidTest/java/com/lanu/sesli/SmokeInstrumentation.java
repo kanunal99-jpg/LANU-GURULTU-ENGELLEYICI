@@ -79,8 +79,14 @@ public class SmokeInstrumentation extends Instrumentation {
             // racing with separate synthetic event/assertion evaluations.
             require(web,"(window.lanuUpdateEvent({state:'available',version:'2.0.9',versionCode:999999,message:'Update test'}), !document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden)","New build offers one-tap download and install");
             require(web,"(window.lanuUpdateEvent({state:'ready',version:'2.0.9',versionCode:999999,message:'Verified'}), document.getElementById('downloadUpdate').hidden && !document.getElementById('installUpdate').hidden)","Verified APK allows installer retry");
+            require(web,"typeof window.LanuDiagnostics.snapshot==='function' && typeof window.LanuDiagnostics.render==='function'","Bundled offline diagnostics available");
+            js(web,"document.getElementById('diagnosticsTab').click()");
+            require(web,"!document.getElementById('diagnosticsPane').hidden && document.getElementById('callsPane').hidden && document.getElementById('updatesPane').hidden","Diagnosis stays in private PIN area");
+            require(web,"document.getElementById('diagnosticsResults').children.length===6","Six local-only capabilities reported without network or microphone requests");
+            js(web,"document.getElementById('refreshDiagnostics').click()");
+            require(web,"document.getElementById('diagnosticsResults').children.length===6","Refreshing capability diagnostics does not duplicate rows");
             js(web,"document.getElementById('callsTab').click()");
-            require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
+            require(web,"document.getElementById('diagnosticsPane').hidden && document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
             assertUpdaterGate(target, false, "Relocking must revoke native OTA before installer");
             require(web,"!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)","No private hints after lock");

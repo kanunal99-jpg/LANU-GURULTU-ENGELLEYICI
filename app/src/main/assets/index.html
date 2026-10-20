@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#101217"><title>Lanu Lens</title>
   <link rel="icon" href="lens.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
-  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
+  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="diagnostics.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
 </head>
 <body>
   <main id="cameraView" class="camera-shell">
@@ -22,11 +22,12 @@
   <section id="privateView" hidden aria-label="Görüşmeler">
   <div class="private-content">
     <div class="private-title"><div><span class="eyebrow">LANU LENS</span><h1>Görüşmeler</h1></div><button id="lockBtn" class="compact secondary">Kilitle</button></div>
-    <nav class="lens-tabs" aria-label="Özel alan sekmeleri">
-      <button id="callsTab" class="lens-tab active" type="button" aria-selected="true">Görüşmeler</button>
-      <button id="updatesTab" class="lens-tab" type="button" aria-selected="false">Güncelleme Kontrol</button>
+    <nav class="lens-tabs" role="tablist" aria-label="Özel alan sekmeleri">
+      <button id="callsTab" role="tab" class="lens-tab active" type="button" aria-controls="callsPane" aria-selected="true" tabindex="0">Görüşmeler</button>
+      <button id="updatesTab" role="tab" class="lens-tab" type="button" aria-controls="updatesPane" aria-selected="false" tabindex="-1">Güncelleme</button>
+      <button id="diagnosticsTab" role="tab" class="lens-tab" type="button" aria-controls="diagnosticsPane" aria-selected="false" tabindex="-1">Tanılama</button>
     </nav>
-    <div id="callsPane">
+    <div id="callsPane" role="tabpanel" aria-labelledby="callsTab" tabindex="0">
     <section class="card number"><div class="label">Görüşme kodun</div><div id="myid" class="myid">······</div><p class="hint">Bu kodu yalnızca görüşmek istediğin kişiyle paylaş.</p></section>
     <section class="card">
       <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
@@ -59,7 +60,7 @@
     <section class="card"><h2>Güvenlik</h2><p class="hint">PIN ve rehber bu cihazda tutulur. PIN unutulursa kurtarılamaz. Alanı kilitlemek görüşmeyi sonlandırır.</p><button id="changePin" class="secondary">PIN değiştir</button><button id="changeCode" class="secondary">Görüşme kodunu değiştir</button><div id="codeChangeConfirm" hidden><p class="hint">Kodun yalnızca sen onaylarsan değişir. Önceki kodla seni arayan kişiler yeni kodunu bilmelidir. Rehberin cihazında korunur ancak diğer kişilerin seni yeni kodla araması gerekir.</p><button id="codeChangeSubmit" class="red">Onayla ve yeni kod oluştur</button><button id="codeChangeCancel" class="secondary">Vazgeç</button></div></section>
     <p class="hint footer">İki kişi de uygulamayı açmalı. İnternet gerekir; normal telefon numaraları aranmaz. Arka plana geçmek görüşmeyi kapatır. Ses kaydı tutulmaz.</p>
     </div>
-    <section id="updatesPane" class="card" hidden aria-labelledby="updateTitle">
+    <section id="updatesPane" role="tabpanel" class="card" hidden aria-labelledby="updatesTab" tabindex="0">
       <h2 id="updateTitle">Güncelleme Kontrol</h2>
       <p class="hint">Kurulu sürüm: <strong id="installedVersion">Kontrol ediliyor…</strong></p>
       <p id="updateStatus" class="hint" role="status" aria-live="polite">Yeni sürümleri buradan denetleyebilirsin.</p>
@@ -69,6 +70,14 @@
       <button id="updateReleases" class="secondary" type="button">GitHub sürümlerini aç</button>
       <p class="hint">APK önce SHA-256 ve aynı uygulama imzasıyla doğrulanır. Android, kurulumu onaylamanı isteyecektir. Bu sayfa PIN korumalıdır.</p>
       <p class="hint">Özel GitHub sürümleri otomatik indirilemez. OTA için ayrı bir herkese açık APK dağıtım adresi ve sürümler boyunca değişmeyen imzalama anahtarı gereklidir. Kaynak kodu özel kalabilir.</p>
+    </section>
+    <section id="diagnosticsPane" role="tabpanel" class="card" hidden aria-labelledby="diagnosticsTab" tabindex="0">
+      <h2>Sistem Tanılama</h2>
+      <p class="hint">Yalnızca bu cihazın temel teknik desteğini denetler. PIN, kişi kodu, görüşme sesi veya telefon bilgisi gönderilmez.</p>
+      <ul id="diagnosticsResults" class="diagnostic-list" aria-label="Cihaz özellikleri"></ul>
+      <p id="diagnosticsSummary" class="hint" role="status" aria-live="polite"></p>
+      <button id="refreshDiagnostics" class="secondary" type="button">Tanılamayı yenile</button>
+      <p class="hint">Destekleniyor olması, iki telefon arasında başarılı gerçek çağrı yapıldığını veya arka planda çağrı alınabileceğini göstermez.</p>
     </section>
   </div>
   </section>
