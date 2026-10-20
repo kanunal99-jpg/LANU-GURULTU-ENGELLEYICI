@@ -79,7 +79,7 @@ final class LanuUpdater {
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
-    private boolean productionOtaConfigured() {
+    boolean productionOtaConfigured() {
         // A debug/unpinned build is never allowed to advertise production OTA.
         return !BuildConfig.DEBUG && BuildConfig.OTA_RELEASE_CERT_SHA256.matches("[0-9a-f]{64}")
                 && isFeedUrl(BuildConfig.OTA_MANIFEST_URL);
