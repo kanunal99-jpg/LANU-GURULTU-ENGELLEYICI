@@ -49,3 +49,10 @@ test('diagnostic tab has semantic roles, keyboard and isolated private panel',()
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.match(css,/max-width:340px/);
 });
+
+test('unknown network state fails closed rather than reporting an active connection',()=>{
+ assert.equal(snapshot({navigator:{},isSecureContext:true}).online,false);
+ assert.equal(snapshot({navigator:{onLine:null},isSecureContext:true}).online,false);
+ assert.equal(snapshot({navigator:{onLine:true},isSecureContext:true}).online,true);
+ assert.equal(snapshot({navigator:{onLine:false},isSecureContext:true}).online,false);
+});
