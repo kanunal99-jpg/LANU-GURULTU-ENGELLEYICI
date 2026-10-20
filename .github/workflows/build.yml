@@ -146,6 +146,17 @@ jobs:
             cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.10.apk
           fi
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.10.apk
+          # Re-check the *actual* binary signer BEFORE the private release and
+          # before public OTA publication; matching Gradle config is not proof.
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
+            expected="$(printf '%s' "$LANU_RELEASE_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            actual="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs dist/Lanu-Lens-2.0.10.apk | sed -n 's/.*Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$actual" != "$expected" ]]; then
+              echo "::error::Production signer digest does not match pinned certificate. Refusing release."
+              exit 1
+            fi
+            echo "Production APK signer verified against the configured fingerprint."
+          fi
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.10.apk > dist/APK-BILGILERI.txt
           unzip -l dist/Lanu-Lens-2.0.10.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
           cd dist
