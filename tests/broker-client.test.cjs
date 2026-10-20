@@ -101,3 +101,11 @@ test('redirected or oversized broker responses are rejected before using signed 
   await assert.rejects(()=>client.signIn());
  }
 });
+
+
+test('bundled broker client is parseable by Android 10 Chrome 74',()=>{
+ const source=require('node:fs').readFileSync('app/src/main/assets/broker-client.js','utf8');
+ assert.doesNotMatch(source,/\?\.(?!\d)|\?\?/);
+ assert.ok(source.includes('typeof fetchApi'));
+ assert.ok(source.includes('identity.privateKey.extractable'));
+});
