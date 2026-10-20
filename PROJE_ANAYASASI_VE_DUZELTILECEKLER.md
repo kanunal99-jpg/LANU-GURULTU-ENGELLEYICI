@@ -259,3 +259,37 @@ Bu puanlar dış denetim veya üretim sertifikasyonu değildir; CI testleri üre
 6. **Gerçek cihazlar:** Samsung, Xiaomi, Huawei (GMS var/yok), Android 8–15, Bluetooth, farklı ağ, ekran kilidi, Doze, 403/500/offline ve force-stop test matrisi; yalnız emulator yetmez.
 
 **Sabit ürün ilkesi:** Kullanıcı tekrar söylemese dahi verilen oturumda kod, test, build, GitHub PR/release ve doğrulama döngüsü tamamlanabildiği kadar ilerletilir; desteklenmeyen sır, servis, fiziksel cihaz ve kalıcı imza oluşturulmuş gibi asla gösterilmez.
+
+---
+
+## 20.10.2026 — Bağlantı kesintisi sonrası 4 paralel geliştirme hattı: kanıt kaydı
+
+**Tekrar çalıştırma kuralı:** GitHub Actions `in_progress` veya `cancelled` sonucu başarılı CI değildir. Eski/çakışmalı PR zorla merge edilmez. Sırf kaynak dosya yazıldı diye üretim hazırlık puanı yükseltilmez.
+
+### Kanıtlı tamamlanan çalışmalar
+- **PR #54 — CI başarılı/merge:** Android SAF `ACTION_CREATE_DOCUMENT` ile şifreli yedek kaydı başarılı sayılmadan URI yeniden açılır; en fazla 400 KiB, SHA256 sabit-zaman karşılaştırması, boyut kontrolü ve geçici encrypted tampon sıfırlama. Bazı bulut sağlayıcıları çevrimdışı senkronize edebilir: gerçek dosya/cihaz testi hâlâ gerekir.
+- **PR #55 — CI başarılı/merge:** Bir PIN/kimlik akışını otomatik değiştirmeyen, **dormant** HTTPS broker cihaz istemcisi eklendi. P-256 nonextractable key store ile imzalı enrollment/login, oturum token'ı yalnız bellekte, recipient-approved pairing ve imzalı davet. Gerçek backend adresi ve FCM yapılandırması olmadan canlı kimlik değildir.
+- **PR #56 — CI başarılı/merge ve Build 154 yayın kanıtı:** APK paket/sürüm/tek imzacı/digest gerçek dosyadan test edilir, Release'a `APK-IMZA-DURUMU.txt` konur. Debug imzalı dosya için `OTA_COMPATIBLE=NO`; production secret ve gerçek OTP/OTA üretim kurulumu tamamlandı anlamına gelmez.
+- **PR #57 — CI başarılı/merge:** Android 10 Chrome 74 üzerinde yeni broker istemcisini bozan 3 optional-chain ifadesi kaldırıldı. API29 gerçek emülatör sonucu için PR #58 ayrıca zorunlu.
+- **PR #58 — test/merge açık:** Eski PR #50'nin iki ana dal conflict'i nedeniyle güncel main'e yeniden taşınan Android 10/API29 ve Android 15/API35 çift CI emülatör matrisi, iki PeerJS vendor parse düzeltmesi, diagnostics'de 4 uyumsuz ifade, kaynak bütünlüğü ve gerçek Android UiAutomation dokunma testi. #50 kapatıldı, **başarılı birleştirildi sayılmaz**. #58 CI tamamlanmadan Google servisleri olmayan Android 10 desteği kabul edilmez.
+
+### Kontrol puanı (100 üzerinden mühendislik değerlendirmesi, bağımsız sertifika değil)
+| Kategori | Doğrulanmış mevcut | #58 iki CI job başarılı ve merge olursa | Premium kabul hedefi |
+|---|---:|---:|---:|
+| Temel işlev | 11/15 | 11/15 | 14/15 |
+| Güvenlik/veri koruma | 17/20 | 17/20 | 19/20 |
+| Gerçek kimlik ve arka plan çağrısı | 9/15 | 9/15 | 14/15 |
+| OTA/dağıtım ve veri göçü | 11/15 | 11/15 | 14/15 |
+| Mimari/erişilebilirlik/Android uyum | 9/15 | 10/15 | 14/15 |
+| CI/test | 10/10 | 10/10 | 9/10 |
+| Gerçek telefon kabul | 1/10 | 1/10 | 9/10 |
+| **Toplam** | **68/100** | **69/100 öngörülen** | **93/100** |
+
+### 70–93 arasını açacak gerçek işler
+1. Kullanıcının onayladığı TLS hostname ve sunucuda secrets/kalıcı DB backup; HTTP broker Android PIN sonrası kontrollü enroll/login'e bağlanacak.
+2. Google servisli Android için backend yetkisine bağlı yüksek öncelikli FCM; Huawei GMS olmayan modellerde alternatif bildirim/kullanıcı deneyimi, ekran kilidi/Doze/mikrofon kuralları.
+3. Aynı üretim sertifikasıyla imzalı APK'lar için GitHub Secrets + ayrı binary-only public `LANU-LENS-OTA` + iki fiziksel cihazda yerinde güncelleme.
+4. Debug→production imza değişimi için iki gerçek cihazda **kullanıcı onaylı şifreli export ve PIN/rehber/kod restore kanıtı**, dosya kaybı ve arka plan iptal testleri.
+5. Samsung/Xiaomi/Huawei, Bluetooth/farklı ağ/izin reddi/Doze/force-stop, APK erişilebilirliği ve üretim Crashlytics; Kotlin MVVM/Compose/Hilt'e veri kayıpsız aşamalı geçiş.
+
+**Kesin sınır:** Android emülatör ve SQLite broker testleri gerçek canlı FCM, prod TLS, üretim imzası veya üretici cihaz testlerinin kanıtı değildir. PIN, rehber, ses, özel P-256 anahtarı ve GitHub secrets paylaşılmaz.
