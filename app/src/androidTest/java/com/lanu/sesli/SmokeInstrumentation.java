@@ -36,6 +36,7 @@ public class SmokeInstrumentation extends Instrumentation {
                 Thread.sleep(200);
             }
             if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
+            verifyOtaDigestRejectsTampering(target);
             require(web, "location.origin === 'https://appassets.androidplatform.net'", "Secure asset origin");
             require(web, "!!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function'", "Microphone API available");
             require(web, "typeof window.LanuAudio.setCallActive === 'function'", "Trusted native bridge");
@@ -97,6 +98,30 @@ public class SmokeInstrumentation extends Instrumentation {
         } finally {
             if (activity != null) { final Activity target = activity; runOnMainSync(target::finish); }
         }
+    }
+    /** Same-size and truncated APK tampering must be detected before installer opens. */
+    private static void verifyOtaDigestRejectsTampering(Activity target) throws Exception {
+        java.io.File file=java.io.File.createTempFile("lanu-ota-integrity-", ".bin", target.getCacheDir());
+        try {
+            byte[] original=new byte[2048];
+            java.util.Arrays.fill(original,(byte)0x3f);
+            try(java.io.FileOutputStream output=new java.io.FileOutputStream(file)){
+                output.write(original);
+            }
+            byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(original);
+            StringBuilder expected=new StringBuilder();
+            for(byte entry:hash) expected.append(String.format(java.util.Locale.ROOT,"%02x",entry&255));
+            if(!LanuUpdater.matchesDigest(file,original.length,expected.toString()))
+                throw new AssertionError("Authentic cached APK digest not accepted");
+            original[1024]=(byte)0x40;
+            try(java.io.FileOutputStream output=new java.io.FileOutputStream(file)){
+                output.write(original);
+            }
+            if(LanuUpdater.matchesDigest(file,original.length,expected.toString()))
+                throw new AssertionError("Same-length malicious APK modification was accepted");
+            if(LanuUpdater.matchesDigest(file,original.length+1,expected.toString()))
+                throw new AssertionError("Truncated APK was accepted");
+        } finally { file.delete(); }
     }
     private void awaitTrue(WebView web,String expression,long duration,String label) throws Exception {
         long deadline=System.currentTimeMillis()+duration;
