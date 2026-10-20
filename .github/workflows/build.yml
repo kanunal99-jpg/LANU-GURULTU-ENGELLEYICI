@@ -207,7 +207,7 @@ jobs:
           export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
           bash scripts/publish-ota.sh
   android-api29:
-    # Google Play hizmetleri olmadan Android 10 uyumluluğunu doğrular; bu,
+    # Android 10 testinde varsa GMS devre dışı bırakılır; bu,
     # Huawei veya diğer marka gerçek cihaz testi yerine geçmez.
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -240,14 +240,19 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Disk alanı
         run: sudo rm -rf "$ANDROID_HOME/ndk" /usr/share/dotnet /opt/ghc
-      - name: Google servissiz Android 10 WebView smoke
+      - name: Android 10 WebView smoke (GMS kapalıyken)
         timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           arch: x86_64
-          target: default
+          # Stable Android 10 image. GMS is disabled below if bundled.
+          # No Google-account login and no push dependency in smoke.
+          target: google_apis
           disk-size: 2048M
           emulator-boot-timeout: 300
           disable-animations: true
-          script: gradle connectedDebugAndroidTest --no-daemon
+          script: |
+            adb shell pm disable-user --user 0 com.google.android.gms || true
+            adb shell dumpsys webviewupdate | head -35
+            gradle connectedDebugAndroidTest --no-daemon
