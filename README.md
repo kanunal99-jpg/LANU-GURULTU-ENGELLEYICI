@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.3.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.4.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -55,3 +55,18 @@ GitHub Actions testleri, yerel PeerJS bütünlüğünü, iki Chrome oturumunda g
 Önceki sürümde ortadaki büyük amblem girişe bağlanmamıştı. Her iki amblem artık aynı üç saniyelik tutma hareketini destekler. Touch Events ve mouse/klavye olayları ayrı işlenir; WebView uyumluluk pointercancel/pointerleave olayları kesilmemiş bir parmak basışının sayacını bozmaz. Gerçek touchcancel, kaydırma, çoklu dokunma ve arka plan olayı hareketi iptal eder. İlk ekrana gizli alanı anlatan yazı eklenmemiştir.
 
 Android smoke testi artık DOM'a PointerEvent göndermek yerine Instrumentation üzerinden gerçek işletim sistemi touchscreen MotionEvent girişleri kullanır: kısa dokunuş, ortadaki amblem, üstteki amblem, küçük parmak hareketi ve kilitlemeden sonra yeniden giriş doğrulanır. Chrome testi de CDP touchscreen girişleri kullanır. Bu testler fiziksel Samsung cihazının birebir doğrulaması olarak sunulmaz.
+
+
+## Uygulama içi OTA güncelleme — 2.0.4
+
+PIN ile özel alana gir → **Güncelleme Kontrol** → **Güncelleme denetle**. Yeni sürüm varsa **Yeni sürümü indir ve doğrula** → **Güncellemeyi kur** düğmelerini kullan. Android'in "Bu kaynaktan izin ver" ve APK kurulum onayları gereklidir. Kullanıcının bilgisi olmadan otomatik/sessiz kurulum yoktur. PIN, görüşme kodu ve şifreli rehber yerinde kalır; fakat **farklı imzalı APK, Android tarafından üstüne yüklenemez**.
+
+### OTA dağıtımının tamamlanması için
+
+Kaynak kodları ve tüm kişisel verileri içeren **özel repo kesinlikle herkese açılmamalı**. Sadece APK + `latest.json` içeren, herkese okunabilir bir **LANU-LENS-OTA** dağıtım deposu kullanılır; dosya adı `Lanu-Lens-2.0.4.apk`, release etiketi `v2.0.4-buildN`; JSON şu şemada: `{"schema":1,"versionCode":N,"versionName":"2.0.4","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.4-buildN/Lanu-Lens-2.0.4.apk","sha256":"64-küçük-harf-hex","sizeBytes":123456}`.
+
+GitHub Actions, üretim anahtarı sağlandığında **yalnızca özel workflow artifact'ı** olarak `dist/latest.json` hazırlar; APK ve JSON'u halka açık ikili dağıtım reposuna göndermek henüz otomatik değildir. Bu adım için depo ve yetkili yayın mekanizması kurulmalı; yayınlanan JSON'daki APK URL'si gerçekten indirilebilir olmalıdır. Android'e gömülen URL, yeni APK üretildiği güncel kamuya açık `latest.json` adresi olmalıdır.
+
+Github Actions deposunda `LANU_OTA_MANIFEST_URL` isimli **Actions variable** ekleyin (örnek: `https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json`). Aynı **kalıcı üretim keystore** ve sırları `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD` isimli GitHub Actions Secrets'a güvenli şekilde girilmelidir. Keystore kaybedilmemeli ve kaynak depoya işlenmemelidir. Bu anahtarla dağıtılan APK, farklı geçmiş debug anahtarından otomatik olarak verileri koruyarak yükseltilemez. Kurulumdan önce PIN/rehber veri yedeği ve güvenli geçiş planı oluşturulmalıdır.
+
+**Henüz yapılandırılmamış kurulumda** denetim düğmesi durumu doğru bildirir, otomatik güncelleme varmış gibi göstermez. Uygulama APK URL'sini veya gizli anahtarları JavaScript'ten kabul etmez; yalnızca build sırasında tanımlı doğrulanmış HTTPS kaynağını kullanır. İzin reddi, internet kesintisi ve imza uyumsuzluğunda güvenli şekilde durur.
