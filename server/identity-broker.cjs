@@ -18,11 +18,37 @@ function signingBytes(purpose,id,nonce){
   return te.encode('LANU_DEVICE_'+purpose+'_V1\n'+id+'\n'+nonce);
 }
 class Broker {
-  constructor({crypto=webcrypto,clock=()=>Date.now()}={}){
-    this.crypto=crypto;this.clock=clock;
+  constructor({crypto=webcrypto,clock=()=>Date.now(),persistence=null}={}){
+    this.crypto=crypto;this.clock=clock;this.persistence=persistence;
     this.devices=new Map();this.challenges=new Map();this.sessions=new Map();
     this.pending=new Map();this.attempts=new Map();this.replay=new Auth.ReplayCache(1024);
     this.pairRequests=new Map();this.trustedPairs=new Set();
+  }
+  // A restart invalidates pending login/enrollment challenges and session
+  // tokens. Only public device identities, consent and replay history survive.
+  static async openPersistent(store,options={}){
+    if(!store || typeof store.load!=='function')throw Error('Durable store unavailable');
+    const broker=new Broker({...options,persistence:store});
+    const snapshot=store.load();
+    if(!snapshot || !Array.isArray(snapshot.devices)||!Array.isArray(snapshot.pairs))
+      throw Error('Corrupt durable identity state');
+    for(const row of snapshot.devices){
+      if(!row || !idFormat(row.id) || !publicKeyFormat(row.keyhex) ||
+         (row.revoked!==0 && row.revoked!==1) ||
+         await broker.fingerprint(row.keyhex)!==row.id)
+        throw Error('Corrupt persisted device identity');
+      const key=await broker.crypto.subtle.importKey('raw',unhex(row.keyhex),
+        {name:'ECDSA',namedCurve:'P-256'},true,['verify']);
+      broker.devices.set(row.id,{publicKey:key,revoked:row.revoked===1});
+    }
+    for(const pair of snapshot.pairs){
+      if(!pair || !idFormat(pair.a)||!idFormat(pair.b)||
+         pair.a>=pair.b || !broker.devices.has(pair.a)||!broker.devices.has(pair.b)||
+         broker.devices.get(pair.a).revoked||broker.devices.get(pair.b).revoked)
+        throw Error('Corrupt persisted trust relation');
+      broker.trustedPairs.add(broker.pairKey(pair.a,pair.b));
+    }
+    return broker;
   }
   random(bytes=16){return hex(this.crypto.getRandomValues(new Uint8Array(bytes)));}
   throttle(key,max=6){
@@ -80,6 +106,9 @@ class Broker {
     const key=await this.crypto.subtle.importKey('raw',unhex(raw),{name:'ECDSA',namedCurve:'P-256'},true,['verify']);
     if(!await this.verifyProof(key,signature,'ENROLL',id,nonce))throw Error('Enrollment denied');
     if(this.devices.size>=10000)throw Error('Registration capacity exhausted');
+    // Write through first: never tell a client enrollment succeeded when
+    // durable state refused the commit.
+    if(this.persistence)this.persistence.insertDevice(id,raw);
     this.devices.set(id,{publicKey:key,revoked:false});
     return id;
   }
@@ -142,8 +171,9 @@ class Broker {
       throw Error('Pairing consent denied');
     if(!this.devices.has(req.from)||this.devices.get(req.from).revoked)
       throw Error('Requester revoked');
-    this.pairRequests.delete(requestId); // One-time consent.
     if(this.trustedPairs.size>=10000)throw Error('Pairing capacity exhausted');
+    if(this.persistence)this.persistence.addPair(req.from,to);
+    this.pairRequests.delete(requestId); // One-time consent after DB commit.
     this.trustedPairs.add(this.pairKey(req.from,to));
     return true;
   }
@@ -157,6 +187,7 @@ class Broker {
   removePairing(token,otherId) {
     const device=this.authorize(token);
     if(!idFormat(otherId))throw Error('Invalid device');
+    if(this.persistence)this.persistence.removePair(device,otherId);
     this.trustedPairs.delete(this.pairKey(device,otherId));
     // Any already queued invitation from this revoked pairing is invalidated.
     for(const id of [device,otherId])
@@ -182,6 +213,8 @@ class Broker {
        this.devices.get(to).revoked ||
        !this.trustedPairs.has(this.pairKey(from,to)))
       throw Error('Pairing approval required');
+    if(this.persistence && !this.persistence.consumeInviteNonce(from+':'+envelope.body.nonce,
+        envelope.body.expiresAt,now))throw Error('Rejected invitation');
     const pending=this.pending.get(to)||[];
     const active=pending.filter(e=>e.body.expiresAt>=now);
     if(active.length>=10)throw Error('Recipient busy');
@@ -198,6 +231,7 @@ class Broker {
   }
   revoke(token){
     const id=this.authorize(token);
+    if(this.persistence)this.persistence.revoke(id);
     this.devices.get(id).revoked=true;
     this.pending.delete(id);
     for(const pair of this.trustedPairs)if(pair.split(':').includes(id))this.trustedPairs.delete(pair);
