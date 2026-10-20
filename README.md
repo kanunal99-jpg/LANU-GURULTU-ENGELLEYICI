@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.9.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.10.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -112,3 +112,7 @@ Native Android OTA köprüsü artık yalnızca **PIN doğrulanmış ve ekranda a
 Sürüm manifesti HTTPS önbellek kullanmadan denetlenir; public OTA yayıncısı GitHub API 403/500 ve ağ kesintisinde ilk yayın moduna sessiz geçmez. Android 15 emülatör smoke ve yayıncı negatif senaryo testleri bu sınırları doğrular.
 
 Üretim OTA ancak `LANU-LENS-OTA` adlı **ayrı public binary-only** depo + uzun ömürlü yedekli keystore + ayrı least-privilege yayın token'ı ile etkinleşir. Gereken GitHub secrets/variables `docs/RELEASE-NOTES.md` ve OTA takip issue #23'tedir. Debug-signed APK'lar arasında imza uyuşmayabileceğinden mevcut uygulama üzerine kurulum garanti değildir.
+
+## Premium iki faz — Faz 1 (2.0.10)
+
+PIN ile açılan AES-GCM şifreli rehberin v1 formatı korunarak bozuk kayıt/şifre sınırları ve veri alan doğrulaması güçlendirildi. Eski PIN/rehber otomatik silinmez. Bu geliştirme kimlik doğrulamalı çağrı sunucusu, arka planda FCM çağrısı veya kalıcı üretim OTA'sını tek başına etkinleştirmez. Faz 2 ayrı PR'da özel tanılama ve erişilebilir arayüzle ilerlemektedir.
