@@ -21,3 +21,12 @@ test('diagnostics capability probes return strict booleans without private stora
   RTCPeerConnection:function(){}});
  assert.deepEqual(Object.values(supported),[true,true,true,true,true,true]);
 });
+
+
+test('Android 10 WebView DOM does not use unsupported Element.replaceChildren or replaceAll',()=>{
+ const files=fs.readdirSync('app/src/main/assets').filter(name=>name.endsWith('.js'));
+ for(const name of files){
+   const js=fs.readFileSync(path.join('app/src/main/assets',name),'utf8');
+   assert.doesNotMatch(js,/\.replaceChildren\s*\(|\.replaceAll\s*\(/,name+' requires a newer Chromium DOM');
+ }
+});
