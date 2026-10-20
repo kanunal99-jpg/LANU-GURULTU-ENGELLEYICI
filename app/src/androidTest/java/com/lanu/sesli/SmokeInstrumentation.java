@@ -64,10 +64,15 @@ public class SmokeInstrumentation extends Instrumentation {
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
             require(web,"typeof window.LanuUpdate.info === 'function' && typeof window.LanuUpdate.check === 'function' && typeof window.LanuUpdate.install === 'function'","OTA native bridge exists");
+            require(web,"typeof window.LanuUpdate.downloadAndInstall === 'function'","One-tap native OTA bridge exists");
             require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab defaults visible");
             js(web,"document.getElementById('updatesTab').click()");
             require(web,"!document.getElementById('updatesPane').hidden && document.getElementById('callsPane').hidden","Update tab opens behind PIN");
             require(web,"document.getElementById('checkUpdates') !== null && document.getElementById('downloadUpdate') !== null && document.getElementById('installUpdate') !== null","OTA controls exist");
+            js(web,"window.lanuUpdateEvent({state:'available',version:'2.0.6',versionCode:99,message:'Update test'})");
+            require(web,"!document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden","New build offers one-tap download and install");
+            js(web,"window.lanuUpdateEvent({state:'ready',version:'2.0.6',versionCode:99,message:'Verified'})");
+            require(web,"document.getElementById('downloadUpdate').hidden && !document.getElementById('installUpdate').hidden","Verified APK allows installer retry");
             js(web,"document.getElementById('callsTab').click()");
             require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
