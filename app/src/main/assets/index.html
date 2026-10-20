@@ -22,6 +22,11 @@
   <section id="privateView" hidden aria-label="Görüşmeler">
   <div class="private-content">
     <div class="private-title"><div><span class="eyebrow">LANU LENS</span><h1>Görüşmeler</h1></div><button id="lockBtn" class="compact secondary">Kilitle</button></div>
+    <nav class="lens-tabs" aria-label="Özel alan sekmeleri">
+      <button id="callsTab" class="lens-tab active" type="button" aria-selected="true">Görüşmeler</button>
+      <button id="updatesTab" class="lens-tab" type="button" aria-selected="false">Güncelleme Kontrol</button>
+    </nav>
+    <div id="callsPane">
     <section class="card number"><div class="label">Görüşme kodun</div><div id="myid" class="myid">······</div><p class="hint">Bu kodu yalnızca görüşmek istediğin kişiyle paylaş.</p></section>
     <section class="card">
       <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
@@ -53,6 +58,18 @@
     <section class="card"><label class="row"><span>Kamera ekranındayken çağrı al</span><input type="checkbox" id="incomingEnabled" checked></label><p class="hint">Kamera ekranında zil ve isteğe bağlı Android bildirimi görünür; cevaplamak için PIN gerekir. Uygulama arka planda veya kapalıyken henüz çağrı alınamaz.</p><button id="notificationPermission" class="secondary">Çağrı bildirimi izni ver</button><p class="hint">Android 13 ve sonrasında sistem bildirim iznini onaylaman gerekir. Bildirimlerde kişi adı ve görüşme kodu gösterilmez.</p></section>
     <section class="card"><h2>Güvenlik</h2><p class="hint">PIN ve rehber bu cihazda tutulur. PIN unutulursa kurtarılamaz. Alanı kilitlemek görüşmeyi sonlandırır.</p><button id="changePin" class="secondary">PIN değiştir</button><button id="changeCode" class="secondary">Görüşme kodunu değiştir</button><div id="codeChangeConfirm" hidden><p class="hint">Kodun yalnızca sen onaylarsan değişir. Önceki kodla seni arayan kişiler yeni kodunu bilmelidir. Rehberin cihazında korunur ancak diğer kişilerin seni yeni kodla araması gerekir.</p><button id="codeChangeSubmit" class="red">Onayla ve yeni kod oluştur</button><button id="codeChangeCancel" class="secondary">Vazgeç</button></div></section>
     <p class="hint footer">İki kişi de uygulamayı açmalı. İnternet gerekir; normal telefon numaraları aranmaz. Arka plana geçmek görüşmeyi kapatır. Ses kaydı tutulmaz.</p>
+    </div>
+    <section id="updatesPane" class="card" hidden aria-labelledby="updateTitle">
+      <h2 id="updateTitle">Güncelleme Kontrol</h2>
+      <p class="hint">Kurulu sürüm: <strong id="installedVersion">Kontrol ediliyor…</strong></p>
+      <p id="updateStatus" class="hint" role="status" aria-live="polite">Yeni sürümleri buradan denetleyebilirsin.</p>
+      <button id="checkUpdates" type="button">Güncelleme denetle</button>
+      <button id="downloadUpdate" type="button" class="green" hidden>Yeni sürümü indir ve doğrula</button>
+      <button id="installUpdate" type="button" class="green" hidden>Güncellemeyi kur</button>
+      <button id="updateReleases" class="secondary" type="button">GitHub sürümlerini aç</button>
+      <p class="hint">APK önce SHA-256 ve aynı uygulama imzasıyla doğrulanır. Android, kurulumu onaylamanı isteyecektir. Bu sayfa PIN korumalıdır.</p>
+      <p class="hint">Özel GitHub sürümleri otomatik indirilemez. OTA için ayrı bir herkese açık APK dağıtım adresi ve sürümler boyunca değişmeyen imzalama anahtarı gereklidir. Kaynak kodu özel kalabilir.</p>
+    </section>
   </div>
   </section>
   <audio id="remote" autoplay playsinline></audio>
