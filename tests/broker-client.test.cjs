@@ -168,3 +168,27 @@ test('manual lock during pending inbox request cannot accept stale response',asy
  await assert.rejects(pending,/Authentication required/);
  await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
 });
+
+
+test('lock during delayed login challenge stops signature and session request entirely',async()=>{
+ const identity=await Auth.generate(webcrypto),broker=new Broker(),mock=service(broker);
+ let release,entered;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const observed=new Promise(resolve=>{entered=resolve;});
+ const fetchDelayed=async(url,options)=>{
+   const response=await mock.api(url,options);
+   if(url.endsWith('/v1/session/challenge')){
+     return {...response,text:async()=>{entered();await gate;return response.text();}};
+   }
+   return response;
+ };
+ const client=Client.create(options(identity,fetchDelayed));
+ await client.enroll(identity);
+ const pending=client.signIn();
+ await observed;
+ client.expire();
+ release();
+ await assert.rejects(pending,/Sign-in cancelled/);
+ assert.equal(mock.calls.some(x=>x.url.endsWith('/v1/session/complete')),false);
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
