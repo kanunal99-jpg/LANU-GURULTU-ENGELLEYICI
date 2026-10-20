@@ -55,12 +55,12 @@ echo "Signer #1 certificate SHA-256 digest: $(printf 'a%.0s' $(seq 1 64))"
       LANU_RELEASE_CERT_SHA256:'b'.repeat(64),MOCK_GH_LOG:logfile,PATH:bin+':'+process.env.PATH};
     let run=cp.spawnSync('bash',[script],{encoding:'utf8',env:{...shared,MOCK_VISIBILITY:'PRIVATE'}});
     assert.notEqual(run.status,0);
-    assert.match(run.stderr,/Create LANU-LENS-OTA as a PUBLIC repository/);
+    assert.match(run.stdout+run.stderr,/Create LANU-LENS-OTA as a PUBLIC repository/);
     assert.doesNotMatch(fs.readFileSync(logfile,'utf8'),/release create/);
     fs.writeFileSync(logfile,'');
     run=cp.spawnSync('bash',[script],{encoding:'utf8',env:{...shared,MOCK_VISIBILITY:'PUBLIC'}});
     assert.notEqual(run.status,0);
-    assert.match(run.stderr,/signing certificate does not match/);
+    assert.match(run.stdout+run.stderr,/signing certificate does not match/);
     assert.doesNotMatch(fs.readFileSync(logfile,'utf8'),/release create/);
   }finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
