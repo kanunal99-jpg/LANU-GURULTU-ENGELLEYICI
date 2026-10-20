@@ -6,7 +6,7 @@ function verifyReleaseEvidence(release,dist,expectedCommit){
     typeof expectedCommit!=='string'||!/^[a-f0-9]{40}$/.test(expectedCommit)||
     release.target_commitish!==expectedCommit)
    throw Error('Release target commit mismatch');
- const tag=/^v2\\.0\\.10-build([1-9][0-9]*)$/.exec(release.tag_name||'');
+ const tag=/^v2\.0\.10-build([1-9][0-9]*)$/.exec(release.tag_name||'');
  if(!tag)throw Error('Release tag/version format mismatch');
  const byName=new Map();
  for(const asset of release.assets){
@@ -44,7 +44,7 @@ if(require.main===module){
  }catch(error){process.stderr.write('Release evidence verification failed: '+error.message+'\n');process.exitCode=1;}
 }
 ,'m').test(signer) ||
-    !/^APK_VERSION_NAME=2\\.0\\.10$/m.test(signer))
+    !/^APK_VERSION_NAME=2\.0\.10$/m.test(signer))
     throw Error('Missing or mismatched APK signing evidence');
  if(/^SIGNING_MODE=DEBUG$/m.test(signer)&&!/^OTA_COMPATIBLE=NO$/m.test(signer))
     throw Error('Debug APK incorrectly claims OTA support');
