@@ -15,7 +15,7 @@ if [[ "$1" == "api" && "$2" == *"contents/latest.json"* ]]; then
   echo "gh: \${MOCK_ERROR} (HTTP \${MOCK_CODE})" >&2; exit 1
 fi
 if [[ "$1" == "api" && "$2" == *"/releases/tags/"* ]]; then
-  echo 'gh: Not Found (HTTP 404)' >&2; exit 1
+  echo "gh: tag lookup (HTTP \${MOCK_TAG_CODE:-404})" >&2; exit 1
 fi
 if [[ "$1 $2" == "release create" ]]; then exit 15; fi
 exit 1
@@ -41,6 +41,16 @@ echo "package: name='com.lanu.sesli' versionCode='120' versionName='2.0.8'"
         assert.doesNotMatch(calls,/release create/,'HTTP '+code+' must never publish');
         assert.match(p.stdout+p.stderr,/Cannot verify previous public OTA manifest/);
       }
+    }
+    for(const tagCode of ['403','500']){
+      fs.writeFileSync(record,'');
+      const bad=cp.spawnSync('bash',['scripts/publish-ota.sh'],{
+        env:{...env,MOCK_CODE:'404',MOCK_ERROR:'Not Found',MOCK_TAG_CODE:tagCode},encoding:'utf8'
+      });
+      assert.notEqual(bad.status,0);
+      assert.match(bad.stdout+bad.stderr,/Cannot verify public release tag/);
+      assert.doesNotMatch(fs.readFileSync(record,'utf8'),/release create/,
+        'Tag lookup HTTP '+tagCode+' must never publish');
     }
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
