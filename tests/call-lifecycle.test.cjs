@@ -614,3 +614,44 @@ test('incoming notification uses a protected Android channel and never includes 
   assert.match(html,/id="notificationPermission"/);
   assert.doesNotMatch(java,/setContentTitle\([^\n]*\.peer\b/);
 });
+
+
+test('routing code generation fails closed without cryptographic randomness',()=>{
+ const h=harness({storage:new Map()});
+ assert.equal(h.peers.length,0);
+ assert.match(h.get('status').textContent,/Güvenli görüşme kodu/);
+ assert.equal(h.context.localStorage.getItem('lanuId'),undefined);
+ assert.doesNotMatch(source,/Math\\.random\\s*\\(/);
+});
+test('routing code uses rejection sampling rather than biased modulo',()=>{
+ const h=harness({lens:true});h.open();let calls=0;
+ h.context.crypto={getRandomValues(values){values[0]=++calls===1 ? 4294967295 : 500000;return values;}};
+ assert.equal(h.context.LanuCalls.rotateCode(),true);
+ assert.equal(calls,2);
+ assert.equal(h.get('myid').textContent,'600000');
+});
+test('repeated spoofable incoming peer ID is throttled without opening microphone',()=>{
+ const h=harness();h.open();
+ for(let n=0;n<4;n++){
+  const incoming=new h.Connection();
+  h.peers[0].emit('call',incoming);
+  assert.equal(h.get('answerBtn').hidden,false);
+  h.click('hangBtn');
+ }
+ const fifth=new h.Connection();h.peers[0].emit('call',fifth);
+ assert.ok(fifth.closed>0);
+ assert.equal(h.requested(),0);
+ assert.equal(h.context.LanuCalls.state(),'idle');
+});
+test('pairing spam attempts from same six-digit code are throttled',()=>{
+ const h=harness({lens:true});h.open();
+ for(let n=0;n<3;n++){
+  const channel=new h.Connection();channel.label='lanu-pair-v1';
+  h.peers[0].emit('connection',channel);
+  assert.equal(channel.closed,0);
+  channel.close();
+ }
+ const fourth=new h.Connection();fourth.label='lanu-pair-v1';
+ h.peers[0].emit('connection',fourth);
+ assert.ok(fourth.closed>0);
+});
