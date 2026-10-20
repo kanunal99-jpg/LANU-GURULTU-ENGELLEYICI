@@ -34,6 +34,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -125,11 +126,20 @@ public class MainActivity extends Activity {
         });
         setContentView(web);
         WebSettings settings = web.getSettings();
+        // No WebView debugging in *any* downloadable build, including the
+        // intentionally debug-signed test APKs published to private Releases.
+        WebView.setWebContentsDebuggingEnabled(false);
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        settings.setSafeBrowsingEnabled(true);
+        settings.setSupportMultipleWindows(false);
+        settings.setGeolocationEnabled(false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
@@ -147,13 +157,20 @@ public class MainActivity extends Activity {
                 return !localOrigin(r.getUrl()) || !r.getUrl().getPath().startsWith("/assets/");
             }
             @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                if (localOrigin(r.getUrl())) return loader.shouldInterceptRequest(r.getUrl());
+                if (localOrigin(r.getUrl())) {
+                    // Never fall back to a remote network request for a
+                    // missing bundled asset or another path on this origin.
+                    if (r.getUrl().getPath().startsWith("/assets/")) {
+                        WebResourceResponse asset = loader.shouldInterceptRequest(r.getUrl());
+                        if (asset != null) return asset;
+                    }
+                    return deniedResource(404);
+                }
                 // Peer signaling fetch/XHR is HTTPS; scripts are bundled, enforced by CSP.
                 if ("https".equals(r.getUrl().getScheme()) && "0.peerjs.com".equals(r.getUrl().getHost())) {
                     return null;
                 }
-                return new WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden",
-                        Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+                return deniedResource(403);
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -168,6 +185,13 @@ public class MainActivity extends Activity {
         web.loadUrl(HOME);
     }
 
+    private static WebResourceResponse deniedResource(int code) {
+        return new WebResourceResponse("text/plain", "UTF-8", code,
+                code == 404 ? "Not Found" : "Forbidden",
+                Collections.singletonMap("Cache-Control", "no-store"),
+                new ByteArrayInputStream(new byte[0]));
+    }
+
     private void requestCapture(PermissionRequest request) {
         if (destroyed || !visible || !localOrigin(request.getOrigin())) { request.deny(); return; }
         String[] resources = request.getResources();
@@ -176,6 +200,9 @@ public class MainActivity extends Activity {
         boolean camera = PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resources[0]);
         boolean microphone = PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0]);
         if (!camera && !microphone) { request.deny(); return; }
+        // Camera is available on the public-facing decoy screen, but WebRTC
+        // microphone capture requires a live PIN-unlocked private session.
+        if (microphone && !privateUnlocked) { request.deny(); return; }
         String permission = camera ? Manifest.permission.CAMERA : Manifest.permission.RECORD_AUDIO;
         if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) request.grant(resources);
         else if (pendingCamera == null && pendingMicrophone == null) {
@@ -189,7 +216,8 @@ public class MainActivity extends Activity {
             PermissionRequest request = code == CAMERA ? pendingCamera : pendingMicrophone;
             if (code == CAMERA) pendingCamera=null; else pendingMicrophone=null;
             if(request != null) {
-                if (!destroyed && visible && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                if (!destroyed && visible && (code != MICROPHONE || privateUnlocked)
+                        && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                     request.grant(new String[]{code == CAMERA ? PermissionRequest.RESOURCE_VIDEO_CAPTURE : PermissionRequest.RESOURCE_AUDIO_CAPTURE});
                 } else request.deny();
             }
