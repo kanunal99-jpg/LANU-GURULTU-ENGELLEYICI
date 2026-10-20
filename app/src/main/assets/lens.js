@@ -91,7 +91,7 @@
     const ratio = Math.min(1,1920/Math.max(width,height)); canvas.width = Math.round(width*ratio); canvas.height = Math.round(height*ratio);
     canvas.getContext('2d').drawImage(video,(video.videoWidth-width)/2,(video.videoHeight-height)/2,width,height,0,0,canvas.width,canvas.height);
     photo = canvas.toDataURL('image/jpeg',0.9); $('photoPreview').src = photo;
-    const img = document.createElement('img'); img.src = photo; img.alt = ''; $('lastPhoto').replaceChildren(img); $('lastPhoto').disabled = false;
+    const img = document.createElement('img'); img.src = photo; img.alt = ''; $('lastPhoto').textContent = ''; $('lastPhoto').appendChild(img); $('lastPhoto').disabled = false;
     $('photoView').hidden = false; $('photoStatus').textContent = 'Kaydetmek için aşağıdaki düğmeyi kullan.';
     message('Fotoğraf çekildi.');
   }
@@ -170,7 +170,7 @@
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
-    $('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
+    $('contactList').textContent = '';$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
   }
@@ -185,7 +185,7 @@
     writes=writes.then(operation,operation);return writes;
   }
   function renderContacts() {
-    $('contactList').replaceChildren(); if(!opened||!vault.data)return;
+    $('contactList').textContent = ''; if(!opened||!vault.data)return;
     $('contactsEnabled').checked=!!vault.data.contactsEnabled; if(!vault.data.contactsEnabled)return;
     for(const contact of vault.data.contacts){
       if(!/^[1-9]\d{5}$/.test(contact.code))continue;
