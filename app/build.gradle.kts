@@ -14,6 +14,12 @@ android {
     namespace = "com.lanu.sesli"
     compileSdk = 35
     buildFeatures { buildConfig = true }
+    // This is a public certificate digest, never the private signing key.
+    val pinnedReleaseCert = providers.environmentVariable("LANU_RELEASE_CERT_SHA256").orNull.orEmpty()
+        .lowercase().replace(":", "").trim()
+    require(pinnedReleaseCert.isEmpty() || pinnedReleaseCert.matches(Regex("[0-9a-f]{64}"))) {
+        "Invalid OTA certificate fingerprint"
+    }
     signingConfigs {
         val storePath = providers.environmentVariable("LANU_SIGNING_STORE_FILE").orNull
         val storePass = providers.environmentVariable("LANU_SIGNING_STORE_PASSWORD").orNull
@@ -47,6 +53,7 @@ android {
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
         versionName = "2.0.10"
         buildConfigField("String", "OTA_MANIFEST_URL", "\"$otaManifestUrl\"")
+        buildConfigField("String", "OTA_RELEASE_CERT_SHA256", "\"$pinnedReleaseCert\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
     compileOptions {
