@@ -73,3 +73,60 @@ Tek kulak kullanımını, WebRTC akışını, mikrofon izinlerini ve Android pla
 ## 2026-10-19 — giriş hatasının kök nedeni ve düzeltmesi
 
 Kamera ekranında iki objektif amblemi olmasına rağmen yalnızca üstteki küçük ambleme giriş olayı bağlanmıştı. Ortadaki büyük amblem boşta kalıyordu. Ayrıca yalnızca sentetik DOM PointerEvent ile yapılan test gerçek Android dokunma iptallerini sınamıyordu. Her iki amblem aynı giriş bileşenine bağlandı; dokunma ve pointer uyumluluk olayları ayrıldı. Android testleri gerçek işletim sistemi MotionEvent dokunuşlarıyla yapılır. Kısa dokunuş/çoklu dokunma/kaydırma/arka plan gizli alanı açmamalıdır; PIN koruması korunur. İlk ekrana giriş açıklaması eklenmez.
+
+---
+
+## 20.10.2026 — LANU Lens 2 fazlı premium dönüşüm: durum, puan ve kabul anayasası
+
+### Kapsam ve değişmez ilkeler
+- Ürün: `com.lanu.sesli` paketli LANU Lens; ilk ekranda gerçek kamera, kullanıcı seçimiyle açılan PIN korumalı özel görüşme, AES-GCM ile yerel şifreli isteğe bağlı rehber ve PeerJS/WebRTC sesli bağlantısı. **Operatör GSM çağrısında sistem çapında gürültü engelleme** veya **uygulama tamamen kapalıyken çağrı** doğrulanmış yetenek değildir.
+- Kişisel PIN, rehber, görüşme kimliği ve gizli arayüz sızdırılamaz; mevcut veriyi silen migrasyon / reset / uninstall, kullanıcıya açık veri kaybı uyarısı ve gerçek kurtarma kanıtı olmadan önerilemez.
+- Ayrı dal → küçük PR → test → gözden geçirme → `main` → doğrulanmış SHA+APK Release. Kritik zincir: ana yol → alternatif → fallback → hata yönetimi → güvenli varsayılan → PII'siz log → smoke. Ücretli servis, hesap bağlantısı veya anahtar oluşturma için kullanıcının açık onayı ve gerçek erişim gerekir.
+- Yeni Android yüzeyleri aşamalı Kotlin + MVVM/MVI, Compose/Material 3, Hilt, Coroutines/Flow ve test edilebilir mimariyi hedefler; kanıtsız toplu yeniden yazım yapılmaz. Firebase yapılandırması veya üretim anahtarı taklit edilmez.
+- “CI başarılı”, “emülatör başarılı”, “fiziksel cihazda başarılı” ve “üretim kabulü” farklı statülerdir; birbirine eşitlenemez.
+
+### Tamamlanan ve kanıtlanan teslimler — 20.10.2026 kesiti
+| Grup | Yapılan | Kanıt / sınırlama |
+| --- | --- | --- |
+| Önceki paketler | WebView köprü kilidi, PIN/foreground OTA yetki denetimi, asset origin fail-closed, R8 küçültme ve imza/hash doğrulama zinciri | PR #27, #28, #29 — birleştirildi; dış OTA kurulumları hariç |
+| Faz 1 ilk paket | AES-GCM v1 envelope salt/IV/cipher/üst boyut doğrulaması, bozuk kayıt üzerine yazmama, yanlış PIN sonrası anahtar referansını temizleme | PR #31 — birleştirildi; iki gerçek cihazda kurtarma kabulü yok |
+| Faz 2 ilk paket | PIN arkasında yalnızca yerel 6 yetenekli tanılama, ARIA sekmeler, klavye, dar ekran ve azaltılmış hareket desteği | PR #32 — birleştirildi; Compose/Hilt/Crashlytics henüz kurulmadı |
+| Birleşik ön sürüm | Lanu Lens 2.0.10, Build 84, 2.097.145 bayt APK; önceki 27/27 CI kontrolü ve başarılı workflow | Tag `v2.0.10-build84`; Actions run `39411211819`. APK **debug imzalı**; üretim OTA değil |
+| Yeni tanılama düzeltmesi | Bilinmeyen `navigator.onLine` durumunda çevrimiçi varsaymama ve regresyon testleri | PR #35; CI tamamlanıp birleştirilmeden tamamlandı sayılmaz |
+
+Bağlantılar: [PR #31](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/31) · [PR #32](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/32) · [PR #35](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/pull/35) · [Build 84 Release](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases/tag/v2.0.10-build84).
+
+### Açık iş listesi ve gerçek bitirme koşulları
+| Öncelik / kaynak | Yapılacak | Bitirme kriteri |
+| --- | --- | --- |
+| P0 / #33 | Şifreli, kullanıcı kontrollü yedekleme ve geri yükleme; PIN/veri göçü | Hatalı ve eksik yedek reddi, eski veri doğrulaması, kritik işlem yarışları ve iptal/force-stop regresyonu; gerçek cihazda kurtarma |
+| P0 / #33 | Güvenilir kullanıcı ve cihaz kimliği, yetkilendirilmiş `callId`, tekrar oynatma önleme, hız sınırlama, cihaz iptali | Gerçek güvenli backend + saldırı testleri; 6 haneli kod tek başına auth değildir |
+| P0 / #21 ve #33 | FCM yüksek öncelikli gelen çağrı, çağrı TTL/iptal ve PIN gate; TURN/fallback | 2 fiziksel Android, Doze/arka plan/kilitli ekran/kapalı uygulama, farklı ağ ve Bluetooth testleri |
+| P0 / #23 ve #33 | Kalıcı ve yedekli production signing, public yalnız APK OTA deposu, sınırlı yetkili token/secret, cert pin | Aynı sertifikayla iki artan build, yerinde güncelleme, PIN/rehber korunumu, kötü manifest/yanlış sertifika/rollback reddi |
+| P1 / #34 | Java/WebView kodu katmanlara ayırıp testli Kotlin MVVM/MVI + Compose + Hilt + Flow migrasyonu | Parça parça çalışan build, mevcut kamera/çağrı/PIN ile geriye uyumluluk ve smoke |
+| P1 / #34 | Crashlytics gerçek Firebase projesi, global exception handler, PII redaksiyonu | Gerçek serviste veri sızdırmayan crash/ANR doğrulaması ve mapping yükleme |
+| P1/P2 / #34 | TR/EN, TalkBack, 200% yazı, yatay/tablet, performans ve erişilebilirlik | Gerçek cihaz a11y ve startup/battery/CPU/RAM ölçümü, izlenebilir test sonuçları |
+| P1/P2 / #34 | SBOM, bağımlılık politikası, Action pinleme, geri dönüş/yayın runbook | CI/doğrulama kayıtları ve rollback tatbikatı |
+| P0/P1 / cihaz | İki gerçek telefonda WebRTC, kamera, ses, Bluetooth, veri koruma ve OTA kabulü | Model/Android/ağ/sürüm/sonuç ve tekrar adımlarıyla kanıt |
+
+### Gerekçeli durum puanı (0–100)
+Bu puanlar kaynak kodu, birleştirilmiş PR'lar, geçmiş CI/Release ve kapatılamayan dış gereksinimlere göre **geçici mühendislik olgunluk notudur**, bağımsız güvenlik sertifikası veya cihazdan alınmış ölçüm değildir.
+
+| Alan | Maksimum | Şimdi | Premium kabul hedefi |
+| --- | ---: | ---: | ---: |
+| İşlevsel özellikler | 15 | 11 | 14 |
+| Güvenlik ve veri koruma | 20 | 13 | 19 |
+| Gerçek kimlik / arka plan çağrısı | 15 | 2 | 14 |
+| Üretim OTA / sürüm | 15 | 5 | 14 |
+| Mimari / UX / a11y | 15 | 9 | 14 |
+| Otomatik test / CI | 10 | 8 | 9 |
+| Fiziksel cihaz / prod smoke | 10 | 1 | 9 |
+| **TOPLAM** | **100** | **49** | **93** |
+
+- **Mevcut: 49/100** (üretim kabulüne hazır değil). **Hedef: 93/100**; hedef puan ancak bitirme kriterleri kapanınca verilir.
+- Öncelik sırası: veri kaybı/kullanıcı güvenliği → üretim imzası+OTA → güvenli auth+FCM → Kotlin/UX+telemetri → iki cihazda bütünsel kabul.
+- Her puan değişikliği: tarih, commit/PR, workflow, gerçek cihaz kanıtı (varsa), bilinen açık risk ile bu bölümde kayıt altına alınır. Yeni PR açılması tek başına puanı yükseltmez.
+
+### Bu çalışmanın sonraki kontrollü kod adımı
+- **P0 güvenlik sınırı:** Asenkron vault şifreleme devam ederken PIN kilitlenir veya başka yazma işlemi başlarsa eski şifreleme sonucunun kilitten sonra yazılmasını engelle; eşzamanlı PIN değişimi / kilit / yazma ve hata durumları için regresyon testi ekle.
+- Onay kapısı: kaynak değişikliği + testler + PR CI; ana dal ve yeni APK yalnız CI başarılı olduktan sonra. Debug anahtarı ile veri kayıpsız üretim OTA iddiası yok.

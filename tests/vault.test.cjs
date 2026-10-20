@@ -106,3 +106,76 @@ test('v1 encrypted vault remains interoperable without schema reset',async()=>{
  const other=new LensVault(db,webcrypto);await other.unlock('741963');assert.equal(db.getItem('lens-vault-v1'),backup);
  assert.equal(other.data.incomingEnabled,true);
 });
+
+
+function gatedCrypto(method, delayedCall=1) {
+ let resume, notify, count=0;
+ const entered=new Promise(resolve=>{notify=resolve;});
+ const intercept=(kind,args)=>{
+  if(kind!==method || ++count!==delayedCall) return webcrypto.subtle[kind](...args);
+  return new Promise((resolve,reject)=>{
+   resume=()=>webcrypto.subtle[kind](...args).then(resolve,reject);
+   notify();
+  });
+ };
+ return {
+  crypto:{
+   getRandomValues(bytes){return webcrypto.getRandomValues(bytes);},
+   subtle:{
+    importKey(...args){return webcrypto.subtle.importKey(...args);},
+    deriveKey(...args){return webcrypto.subtle.deriveKey(...args);},
+    encrypt(...args){return intercept('encrypt',args);},
+    decrypt(...args){return intercept('decrypt',args);}
+   }
+  },
+  entered,
+  release(){if(!resume)throw Error('crypto was not delayed');resume();}
+ };
+}
+
+test('locking during an in-flight encrypted write cannot restore old contacts or a session',async()=>{
+ const db=storage(),original=new LensVault(db,webcrypto);
+ await original.create('741963');original.data.contacts.push({code:'654321',name:'Original'});await original.write(original.data);
+ const before=db.getItem('lens-vault-v1');original.lock();
+ const gate=gatedCrypto('encrypt'),vault=new LensVault(db,gate.crypto);
+ await vault.unlock('741963');
+ const pending=vault.write({...vault.data,contacts:[{code:'654321',name:'Stale'}]});
+ await gate.entered;
+ vault.lock();gate.release();
+ await assert.rejects(pending,/Cancelled/);
+ assert.equal(vault.key,null);assert.equal(vault.data,null);
+ assert.equal(db.getItem('lens-vault-v1'),before);
+ await original.unlock('741963');assert.equal(original.data.contacts[0].name,'Original');
+});
+
+test('a slow earlier vault write cannot overwrite a newer successful write',async()=>{
+ const db=storage(),initial=new LensVault(db,webcrypto);await initial.create('741963');initial.lock();
+ const gate=gatedCrypto('encrypt'),vault=new LensVault(db,gate.crypto);await vault.unlock('741963');
+ const older=vault.write({...vault.data,contacts:[{code:'654321',name:'Older'}]});
+ await gate.entered;
+ await vault.write({...vault.data,contacts:[{code:'654321',name:'Newer'}]});
+ const newerCipher=db.getItem('lens-vault-v1');gate.release();
+ await assert.rejects(older,/Cancelled/);
+ assert.equal(db.getItem('lens-vault-v1'),newerCipher);
+ vault.lock();await vault.unlock('741963');assert.equal(vault.data.contacts[0].name,'Newer');
+});
+
+test('a locked PIN rotation cannot overwrite the old PIN or unlock the vault',async()=>{
+ const db=storage(),initial=new LensVault(db,webcrypto);await initial.create('741963');initial.lock();
+ const before=db.getItem('lens-vault-v1');
+ const gate=gatedCrypto('encrypt'),vault=new LensVault(db,gate.crypto);await vault.unlock('741963');
+ const pending=vault.create('852963');
+ await gate.entered;vault.lock();gate.release();
+ await assert.rejects(pending,/Cancelled/);
+ assert.equal(db.getItem('lens-vault-v1'),before);assert.equal(vault.key,null);
+ await assert.rejects(vault.unlock('852963'));await vault.unlock('741963');
+});
+
+test('a late decrypt cannot reopen the private vault after the user locks it',async()=>{
+ const db=storage(),initial=new LensVault(db,webcrypto);await initial.create('741963');initial.lock();
+ const gate=gatedCrypto('decrypt'),vault=new LensVault(db,gate.crypto);
+ const pending=vault.unlock('741963');
+ await gate.entered;vault.lock();gate.release();
+ await assert.rejects(pending,/Cancelled/);
+ assert.equal(vault.key,null);assert.equal(vault.salt,null);assert.equal(vault.data,null);
+});

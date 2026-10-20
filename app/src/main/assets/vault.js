@@ -36,7 +36,7 @@
     return {salt,iv,cipher};
   }
   class LensVault {
-    constructor(storage, cryptoAPI) { this.storage = storage; this.crypto = cryptoAPI; this.key = null; this.data = null; this.salt = null; }
+    constructor(storage, cryptoAPI) { this.storage = storage; this.crypto = cryptoAPI; this.key = null; this.data = null; this.salt = null; this.epoch = 0; this.operation = 0; }
     exists() { return this.storage.getItem(KEY) !== null; }
     async derive(pin, salt) {
       if (!/^\d{6,12}$/.test(pin)) throw new Error('PIN 6–12 rakam olmalı.');
@@ -46,31 +46,42 @@
     async unlock(pin) {
       // Fail closed: a rejected PIN must never leave an earlier key in memory.
       this.lock();
+      const epoch = this.epoch;
       const {salt,iv,cipher} = parseRecord(this.storage.getItem(KEY));
       const key = await this.derive(pin,salt);
       const raw = await this.crypto.subtle.decrypt({name:'AES-GCM',iv},key,cipher);
       if (raw.byteLength > MAX_PLAINTEXT) throw new Error('Şifreli kayıt çok büyük.');
       const data = validData(JSON.parse(new TextDecoder().decode(raw)));
+      // A lifecycle lock during slow PBKDF2/decrypt revokes this unlock.
+      if (epoch !== this.epoch) throw new Error('Cancelled');
       this.key = key; this.salt = salt; this.data = data; return data;
     }
     async create(pin, canCommit = () => true) {
+      const epoch = this.epoch, operation = ++this.operation;
       const salt = this.crypto.getRandomValues(new Uint8Array(16)), key = await this.derive(pin,salt);
       const data = this.data || {contactsEnabled:false,contacts:[],incomingEnabled:true};
-      await this.write(data,key,salt,canCommit); this.key = key; this.salt = salt; this.data = data; return data;
+      await this.persist(data,key,salt,canCommit,epoch,operation);
+      this.key = key; this.salt = salt; this.data = data; return data;
     }
     async write(data, key = this.key, salt = this.salt, canCommit = () => true) {
       if (!key || !salt) throw new Error('Önce kilidi aç.');
+      const epoch = this.epoch, operation = ++this.operation;
+      return this.persist(data,key,salt,canCommit,epoch,operation);
+    }
+    async persist(data,key,salt,canCommit,epoch,operation) {
       validData(data);
       const plaintext = new TextEncoder().encode(JSON.stringify(data));
       if (plaintext.length > MAX_PLAINTEXT) throw new Error('Rehber kayıt sınırı aşıldı.');
       const iv = this.crypto.getRandomValues(new Uint8Array(12));
       const cipher = await this.crypto.subtle.encrypt({name:'AES-GCM',iv},key,plaintext);
-      if (!canCommit()) throw new Error('Cancelled');
+      // Reject late encryption after lock, another write, or cancelled PIN gate.
+      // Never resurrect a session or overwrite a newer encrypted record.
+      if (epoch !== this.epoch || operation !== this.operation || !canCommit()) throw new Error('Cancelled');
       // One atomic localStorage assignment; a thrown quota error preserves the
       // previous ciphertext. This API cannot silently reset or self-heal data.
       this.storage.setItem(KEY,JSON.stringify({v:1,salt:encode(salt),iv:encode(iv),cipher:encode(cipher)}));
     }
-    lock() { this.key = null; this.data = null; this.salt = null; }
+    lock() { this.epoch++; this.operation++; this.key = null; this.data = null; this.salt = null; }
   }
   root.LensVault = LensVault;
   if (typeof module !== 'undefined') module.exports = LensVault;
