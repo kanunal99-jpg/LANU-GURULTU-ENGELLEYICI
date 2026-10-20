@@ -83,7 +83,7 @@ test('installer re-verifies the on-disk APK when the user taps install',()=>{
   assert.match(java,/new java\.io\.FileInputStream\(file\)/);
   assert.match(java,/APK changed after verification/);
   assert.match(java,/validatePackage\(file,candidate\.code\)/);
-  assert.ok(java.indexOf('validatePackage(file,candidate.code)')<java.indexOf('openInstallerAfterValidation();'));
+  assert.ok(java.indexOf('validatePackage(file,candidate.code,candidate.version)')<java.indexOf('openInstallerAfterValidation();'));
   assert.match(java,/verified!=file/);
   assert.match(java,/busy=true;\s*emit\("verifying"/);
   assert.match(lens,/\['checking','downloading','verifying','installing'\]\.includes/);
@@ -117,4 +117,21 @@ test('manifest refresh bypasses stale intermediary caches',()=>{
   assert.match(java,/c\.setUseCaches\(false\)/);
   assert.match(java,/Cache-Control","no-cache, no-store"/);
   assert.match(java,/Pragma","no-cache"/);
+});
+
+test('OTA manifest URL is exactly pinned and update release tag binds version with versionCode',()=>{
+  assert.match(java,/return "https:\\/\\/raw\\.githubusercontent\\.com\\/kanunal99-jpg\\/LANU-LENS-OTA\\/main\\/latest\\.json"\\.equals\\(url\\)/);
+  assert.match(java,/isExpectedReleaseUrl\\(url,version,code\\)/);
+  assert.match(java,/OTA_REPO_PATH\\+"v"\\+version\\+"-build"\\+code/);
+  assert.match(java,/u\\.getQuery\\(\\)==null && u\\.getRef\\(\\)==null/);
+});
+test('production OTA certificate is pinned and verified against both installed and proposed APK',()=>{
+  assert.match(gradle,/LANU_RELEASE_CERT_SHA256/);
+  assert.match(gradle,/OTA_RELEASE_CERT_SHA256/);
+  assert.match(java,/BuildConfig\\.OTA_RELEASE_CERT_SHA256/);
+  assert.match(java,/MessageDigest\\.getInstance\\("SHA-256"\\)\\.digest\\(sig\\.toByteArray\\(\\)\\)/);
+  assert.match(java,/for\\(Signature sig:proposed\\)/);
+  assert.match(java,/for\\(Signature sig:existing\\)/);
+  assert.match(java,/wantedVersion\\.equals\\(archive\\.versionName\\)/);
+  assert.match(java,/u\\.getPort\\(\\)!=443/);
 });
