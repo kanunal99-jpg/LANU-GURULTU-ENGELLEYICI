@@ -152,3 +152,27 @@ test('pairing attempts are limited by device within a minute',async()=>{
  assert.throws(()=>broker.requestPairing(at,b.deviceId),/Rate limited/);
  assert.equal(broker.listPairRequests(bt).length,3);
 });
+
+test('revoking pairing while signature verification is in flight cannot enqueue a stale invitation',async()=>{
+ const broker=new Broker(),a=await Auth.generate(webcrypto),b=await Auth.generate(webcrypto);
+ await enroll(broker,a);await enroll(broker,b);
+ const at=await login(broker,a),bt=await login(broker,b);
+ const req=broker.requestPairing(at,b.deviceId);
+ broker.approvePairing(bt,req.requestId,a.deviceId);
+ const invite=await Auth.signInvite(webcrypto,a,b.deviceId);
+ let unblock,entered;
+ const gate=new Promise(resolve=>{unblock=resolve;});
+ const observed=new Promise(resolve=>{entered=resolve;});
+ const subtle=new Proxy(webcrypto.subtle,{get(target,name){
+   if(name==='verify')return (...args)=>{entered();return gate.then(()=>target.verify(...args));};
+   const value=target[name];
+   return typeof value==='function'?value.bind(target):value;
+ }});
+ broker.crypto={getRandomValues:values=>webcrypto.getRandomValues(values),subtle};
+ const pending=broker.submitInvite(at,invite);
+ await observed;
+ broker.removePairing(bt,a.deviceId);
+ unblock();
+ await assert.rejects(pending,/Pairing approval required/);
+ assert.deepEqual(broker.takeInvites(bt),[]);
+});
