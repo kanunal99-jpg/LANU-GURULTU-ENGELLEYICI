@@ -74,10 +74,24 @@ final class LanuUpdater {
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
-    void info(){emit("info","Yüklü sürüm: "+installedVersion()+" (kod "+installedCode()+")");}
+    private boolean readyForInstall() {
+        return latest != null && latest.code > installedCode()
+                && verified != null && verified.isFile() && verified.length() == latest.size;
+    }
+    private static boolean sameCandidate(Candidate a, Candidate b) {
+        return a != null && b != null && a.code == b.code && a.size == b.size
+                && a.sha.equals(b.sha) && a.url.equals(b.url) && a.version.equals(b.version);
+    }
+    void info() {
+        if (readyForInstall()) emit("ready","Önceden doğrulanmış güncelleme hazır. Kurulum için onayla.");
+        else emit("info","Yüklü sürüm: "+installedVersion()+" (kod "+installedCode()+")");
+    }
     void check(){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
-        latest=null;verified=null;
+        // Keep previously verified APK across tab changes and the Android
+        // unknown-sources permission screen, which locks the private UI.
+        final Candidate previous = latest;
+        final File previousApk = verified;
         String feed=BuildConfig.OTA_MANIFEST_URL;
         if(feed.isEmpty()){
             emit("not_configured","Güvenli OTA dağıtım adresi henüz kurulmadı. Özel GitHub deposundaki APK anonim indirilemez.");
@@ -108,14 +122,32 @@ final class LanuUpdater {
             final Candidate candidate=found;final String failure=error;
             main.post(()->{
                 if(destroyed)return;
-                busy=false;latest=candidate;
-                if(failure!=null)emit("error",failure);
-                else if(candidate.code>installedCode())emit("available","Yeni sürüm bulundu: "+candidate.version+". İndirmek için onayla.");
-                else emit("current","Uygulaman güncel. Kurulu sürüm: "+installedVersion());
+                busy=false;
+                if(failure!=null) {
+                    if (previousApk != null && previousApk.isFile() && previous != null
+                            && previous.code > installedCode() && previousApk.length() == previous.size) {
+                        latest=previous;verified=previousApk;
+                        emit("ready","Ağ denetimi başarısız; önceden doğrulanmış güncelleme hâlâ hazır.");
+                    } else {
+                        latest=null;verified=null;emit("error",failure);
+                    }
+                } else {
+                    latest=candidate;
+                    verified=sameCandidate(previous,candidate) && previousApk!=null
+                            && previousApk.isFile() && previousApk.length()==candidate.size ? previousApk : null;
+                    if(candidate.code>installedCode()) {
+                        if(readyForInstall())emit("ready","Güncelleme "+candidate.version+" daha önce doğrulandı; kuruluma hazır.");
+                        else emit("available","Yeni sürüm bulundu: "+candidate.version+". İndirmek için onayla.");
+                    } else {
+                        verified=null;emit("current","Uygulaman güncel. Kurulu sürüm: "+installedVersion());
+                    }
+                }
             });
         });
     }
-    void download(){
+    void download(){download(false);}
+    void downloadAndInstall(){download(true);}
+    private void download(boolean installAfterVerification){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         Candidate next=latest;
         if(next==null||next.code<=installedCode()){emit("error","Önce güncelleme denetimi yap.");return;}
@@ -129,11 +161,19 @@ final class LanuUpdater {
                 if(tmp.exists()&&!tmp.delete())throw new IllegalStateException("Cannot clean temp");
                 MessageDigest digest=MessageDigest.getInstance("SHA-256");
                 long total=0;
+                int lastPercent=0;
                 try(InputStream input=openApk(next.url);FileOutputStream out=new FileOutputStream(tmp)){
                     byte[] buffer=new byte[32768];int n;
                     while((n=input.read(buffer))!=-1){
+                        if(Thread.currentThread().isInterrupted())throw new java.io.InterruptedIOException("Cancelled update");
                         if(total+n>MAX_APK||total+n>next.size)throw new IllegalArgumentException("Unexpected APK length");
                         digest.update(buffer,0,n);out.write(buffer,0,n);total+=n;
+                        int percent=(int)((total*100)/next.size);
+                        if(percent>=lastPercent+10 && percent<100){
+                            lastPercent=percent;
+                            final int shown=percent;
+                            main.post(()->{if(!destroyed)emit("downloading","APK indiriliyor: %"+shown);});
+                        }
                     }
                     out.getFD().sync();
                 }
@@ -153,13 +193,17 @@ final class LanuUpdater {
                 if(destroyed)return;
                 busy=false;
                 if(failure!=null){verified=null;emit("error",failure);}
-                else {verified=dest;emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");}
+                else {
+                    verified=dest;
+                    emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");
+                    if(installAfterVerification)install();
+                }
             });
         });
     }
     void install(){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
-        if(verified==null||!verified.isFile()||latest==null){emit("error","Önce güncellemeyi indirip doğrula.");return;}
+        if(!readyForInstall()){emit("error","Önce güncellemeyi indirip doğrula.");return;}
         if(!activity.getPackageManager().canRequestPackageInstalls()){
             awaitingInstallPermission=true;
             emit("permission","Android'de Lanu Lens için ‘Bu kaynaktan izin ver’ seçeneğini aç.");
@@ -250,20 +294,30 @@ final class LanuUpdater {
     @SuppressWarnings("deprecation")
     private void validatePackage(File apk,int wantedCode) throws Exception {
         PackageManager pm=activity.getPackageManager();
-        int flags=PackageManager.GET_SIGNATURES;
+        int flags=Build.VERSION.SDK_INT>=28
+                ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
         PackageInfo archive=pm.getPackageArchiveInfo(apk.getAbsolutePath(),flags);
         PackageInfo current=pm.getPackageInfo(activity.getPackageName(),flags);
-        if(archive==null||!activity.getPackageName().equals(archive.packageName)
-                ||archive.signatures==null||current.signatures==null
-                ||archive.signatures.length==0||current.signatures.length==0
-                ||archive.signatures.length!=current.signatures.length)
+        if(archive==null||!activity.getPackageName().equals(archive.packageName))
             throw new SecurityException("Package identity invalid");
+        Signature[] proposed;
+        Signature[] existing;
+        if(Build.VERSION.SDK_INT>=28){
+            proposed=archive.signingInfo==null?null:archive.signingInfo.getApkContentsSigners();
+            existing=current.signingInfo==null?null:current.signingInfo.getApkContentsSigners();
+        }else{
+            proposed=archive.signatures;existing=current.signatures;
+        }
+        if(proposed==null||existing==null||proposed.length==0
+                ||proposed.length!=existing.length)throw new SecurityException("Package signing info unavailable");
         int code=Build.VERSION.SDK_INT>=28?(int)archive.getLongVersionCode():archive.versionCode;
         if(code!=wantedCode||code<=installedCode())throw new SecurityException("Unexpected version");
-        for(int i=0;i<archive.signatures.length;i++){
-            Signature sig=archive.signatures[i];boolean match=false;
-            for(Signature existing:current.signatures)
-                if(Arrays.equals(sig.toByteArray(),existing.toByteArray())){match=true;break;}
+        // Exact current signer equality is deliberately stricter than a
+        // historical certificate chain: never accept an unexpected key swap.
+        for(Signature sig:proposed){
+            boolean match=false;
+            for(Signature currentSigner:existing)
+                if(Arrays.equals(sig.toByteArray(),currentSigner.toByteArray())){match=true;break;}
             if(!match)throw new SecurityException("APK signing certificate changed");
         }
     }
