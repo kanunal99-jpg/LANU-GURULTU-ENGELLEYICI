@@ -226,7 +226,13 @@ public class SmokeInstrumentation extends Instrumentation {
     private void pointer(long down,int action,float x,float y) {
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-        try{sendPointerSync(event);}finally{event.recycle();}
+        try{
+            // Instrumentation.sendPointerSync can cross the Android 10 UID
+            // boundary and throw INJECT_EVENTS. UiAutomation is Android's
+            // sanctioned OS-level automation channel; not a DOM fake.
+            if(!getUiAutomation().injectInputEvent(event,true))
+                throw new AssertionError("Android denied real touch input");
+        }finally{event.recycle();}
     }
     private String js(WebView view, String expression) throws Exception {
         CountDownLatch done = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();
