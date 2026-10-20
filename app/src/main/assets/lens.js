@@ -204,7 +204,7 @@
   $('callsTab').addEventListener('click',()=>showPrivateTab(false));
   $('updatesTab').addEventListener('click',()=>showPrivateTab(true));
   $('checkUpdates').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.check();});
-  $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.download();});
+  $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.downloadAndInstall();});
   $('installUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.install();});
   $('updateReleases').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.releases();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
