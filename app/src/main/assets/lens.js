@@ -30,9 +30,10 @@
     $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
     $('downloadUpdate').hidden = event.state !== 'available';
     $('installUpdate').hidden = event.state !== 'ready' && event.state !== 'permission' && event.state !== 'installing';
-    $('checkUpdates').disabled = event.state === 'checking' || event.state === 'downloading';
-    $('downloadUpdate').disabled = event.state === 'downloading';
-    $('installUpdate').disabled = event.state === 'installing';
+    const busy = ['checking','downloading','verifying','installing'].includes(event.state);
+    $('checkUpdates').disabled = busy;
+    $('downloadUpdate').disabled = busy;
+    $('installUpdate').disabled = busy;
   };
   const storage = () => window.localStorage;
   function stopCamera() {

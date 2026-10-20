@@ -37,7 +37,8 @@ final class LanuUpdater {
     private final Activity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private boolean busy, destroyed, awaitingInstallPermission;
+    private boolean busy, awaitingInstallPermission;
+    private volatile boolean destroyed;
     private Candidate latest;
     private File verified;
 
@@ -118,7 +119,12 @@ final class LanuUpdater {
                     ||!hash.matches("[0-9a-f]{64}")||size<1024||size>MAX_APK
                     ||!isApkUrl(url))throw new IllegalArgumentException("Güncelleme dosyası bilgileri geçersiz");
                 found=new Candidate(code,version,url,hash,size);
-            }catch(Exception e){Log.w(TAG,"Update metadata unavailable ("+e.getClass().getSimpleName()+")");error="Sürüm bilgisi alınamadı. Bağlantını ve yayın adresini kontrol et.";}
+            }catch(Exception e){
+                Log.w(TAG,"Update metadata unavailable ("+e.getClass().getSimpleName()+")");
+                error="Manifest HTTP status: 404".equals(e.getMessage())
+                        ? "OTA yayın adresi henüz hazırlanmadı. Kurulum ve verilerin güvende."
+                        : "Sürüm bilgisi alınamadı. Bağlantını ve yayın adresini kontrol et.";
+            }
             final Candidate candidate=found;final String failure=error;
             main.post(()->{
                 if(destroyed)return;
@@ -151,10 +157,17 @@ final class LanuUpdater {
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         Candidate next=latest;
         if(next==null||next.code<=installedCode()){emit("error","Önce güncelleme denetimi yap.");return;}
+        if(readyForInstall()) {
+            emit("ready","Önceden doğrulanmış güncelleme hazır.");
+            if(installAfterVerification)install();
+            return;
+        }
         busy=true;emit("downloading","Güncelleme APK'sı indiriliyor ve doğrulanıyor…");
         io.execute(()->{
-            File dest=new File(new File(activity.getCacheDir(),"updates"),"lanu-lens-update.apk");
-            File tmp=new File(dest.getParentFile(),"download.tmp");
+            // Cache paths are bound to the target build. An interrupted
+            // download of a newer build must not erase the older verified APK.
+            File dest=new File(new File(activity.getCacheDir(),"updates"),"lanu-lens-"+next.code+".apk");
+            File tmp=new File(dest.getParentFile(),"download-"+next.code+".tmp");
             String error=null;
             try {
                 if(!dest.getParentFile().exists()&&!dest.getParentFile().mkdirs())throw new IllegalStateException("Cannot create cache");
@@ -186,7 +199,8 @@ final class LanuUpdater {
                 Log.w(TAG,"Update verification failed ("+e.getClass().getSimpleName()+")");
                 error=e instanceof SecurityException?"APK imzası veya SHA-256 doğrulanamadı. Güncelleme kurulmadı.":
                        "APK indirilemedi veya doğrulanamadı. İnternet ve dağıtım adresini kontrol et.";
-                tmp.delete();dest.delete();
+                // Never delete a previously verified APK on download failure.
+                tmp.delete();
             }
             final String failure=error;
             main.post(()->{
@@ -204,6 +218,34 @@ final class LanuUpdater {
     void install(){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         if(!readyForInstall()){emit("error","Önce güncellemeyi indirip doğrula.");return;}
+        busy=true;
+        emit("verifying","Kurulumdan önce APK imzası ve SHA-256 yeniden doğrulanıyor…");
+        final Candidate candidate=latest;
+        final File file=verified;
+        io.execute(()->{
+            boolean valid=false;
+            try{
+                if(!matchesDigest(file,candidate.size,candidate.sha))
+                    throw new SecurityException("APK changed after verification");
+                validatePackage(file,candidate.code);
+                valid=true;
+            }catch(Exception e){
+                Log.w(TAG,"Pre-install APK integrity verification failed ("+e.getClass().getSimpleName()+")");
+            }
+            final boolean verifiedAgain=valid;
+            main.post(()->{
+                if(destroyed)return;
+                busy=false;
+                if(!verifiedAgain || latest!=candidate || verified!=file || !readyForInstall()){
+                    verified=null;
+                    emit("error","Kurulumdan önce APK doğrulanamadı. Yeniden indirmen gerekiyor.");
+                    return;
+                }
+                openInstallerAfterValidation();
+            });
+        });
+    }
+    private void openInstallerAfterValidation(){
         if(!activity.getPackageManager().canRequestPackageInstalls()){
             awaitingInstallPermission=true;
             emit("permission","Android'de Lanu Lens için ‘Bu kaynaktan izin ver’ seçeneğini aç.");
@@ -258,7 +300,8 @@ final class LanuUpdater {
     private static byte[] readSmall(String url) throws Exception {
         HttpsURLConnection c=connection(url);
         try{
-            if(c.getResponseCode()!=200)throw new IllegalStateException("Manifest HTTP status");
+            int status=c.getResponseCode();
+            if(status!=200)throw new IllegalStateException("Manifest HTTP status: "+status);
             try(InputStream in=c.getInputStream();java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
                 byte[] b=new byte[2048];int n;
                 while((n=in.read(b))!=-1){if(out.size()+n>MAX_MANIFEST)throw new IllegalArgumentException("Manifest too big");out.write(b,0,n);}
@@ -286,6 +329,26 @@ final class LanuUpdater {
         }
         throw new SecurityException("Too many redirects");
     }
+    /** Re-reads cached bytes on every install; also exercised in Android emulator. */
+    static boolean matchesDigest(File file,long expectedSize,String expectedSha) throws Exception {
+        if(file==null||expectedSize<1024||expectedSize>MAX_APK
+                ||expectedSha==null||!expectedSha.matches("[0-9a-f]{64}")
+                ||!file.isFile()||file.length()!=expectedSize)return false;
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        long total=0;
+        try(InputStream input=new java.io.FileInputStream(file)){
+            byte[] buffer=new byte[32768];int n;
+            while((n=input.read(buffer))!=-1){
+                total+=n;
+                if(total>expectedSize)return false;
+                digest.update(buffer,0,n);
+            }
+        }
+        return total==expectedSize && MessageDigest.isEqual(
+                hex(digest.digest()).getBytes(StandardCharsets.US_ASCII),
+                expectedSha.getBytes(StandardCharsets.US_ASCII));
+    }
+
     private static String hex(byte[] b){
         char[] out=new char[b.length*2], alphabet="0123456789abcdef".toCharArray();
         for(int i=0;i<b.length;i++){out[i*2]=alphabet[(b[i]&255)>>>4];out[i*2+1]=alphabet[b[i]&15];}

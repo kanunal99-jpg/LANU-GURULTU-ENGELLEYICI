@@ -70,3 +70,28 @@ test('version pinning prevents a remote older APK from being installed',()=>{
   assert.match(java,/proposed\.length!=existing\.length/);
   assert.match(java,/Signature\[\] proposed/);
 });
+
+test('production OTA feed is pinned by default before the public mirror exists',()=>{
+  assert.match(gradle,/defaultOtaManifestUrl = "https:\/\/raw\.githubusercontent\.com\/kanunal99-jpg\/LANU-LENS-OTA\/main\/latest\.json"/);
+  assert.match(gradle,/otaManifestUrl == defaultOtaManifestUrl/);
+  assert.match(gradle,/versionName = "2\.0\.7"/);
+  assert.match(java,/Manifest HTTP status: 404/);
+});
+test('installer re-verifies the on-disk APK when the user taps install',()=>{
+  assert.match(java,/void install\(\)\s*\{/);
+  assert.match(java,/void openInstallerAfterValidation\(\)\s*\{/);
+  assert.match(java,/new java\.io\.FileInputStream\(file\)/);
+  assert.match(java,/APK changed after verification/);
+  assert.match(java,/validatePackage\(file,candidate\.code\)/);
+  assert.ok(java.indexOf('validatePackage(file,candidate.code)')<java.indexOf('openInstallerAfterValidation();'));
+  assert.match(java,/verified!=file/);
+  assert.match(java,/busy=true;\s*emit\("verifying"/);
+  assert.match(lens,/\['checking','downloading','verifying','installing'\]\.includes/);
+});
+test('interrupted downloads preserve earlier valid build and isolate temp names',()=>{
+  assert.match(java,/"lanu-lens-"\+next\.code\+"\.apk"/);
+  assert.match(java,/"download-"\+next\.code\+"\.tmp"/);
+  assert.doesNotMatch(java,/tmp\.delete\(\);dest\.delete\(\);/);
+  assert.match(java,/if\(readyForInstall\(\)\)\s*\{/);
+  assert.match(java,/if\(Thread\.currentThread\(\)\.isInterrupted\(\)\)/);
+});

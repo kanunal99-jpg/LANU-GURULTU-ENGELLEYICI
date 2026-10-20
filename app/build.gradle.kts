@@ -1,8 +1,13 @@
 plugins { id("com.android.application") }
 
-val otaManifestUrl = providers.environmentVariable("LANU_OTA_MANIFEST_URL").orNull ?: ""
-require(otaManifestUrl.isEmpty() || otaManifestUrl.matches(Regex("https://[A-Za-z0-9._/~%-]+"))) {
-    "LANU_OTA_MANIFEST_URL must be a plain HTTPS URL without query parameters"
+// Bake in a fixed public binary-only feed even before its first release.
+// Once that feed is published, installed production builds work without an
+// app-side reconfiguration or another bootstrap APK.
+val defaultOtaManifestUrl = "https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json"
+val otaManifestUrl = providers.environmentVariable("LANU_OTA_MANIFEST_URL").orNull
+    ?.takeIf { it.isNotBlank() } ?: defaultOtaManifestUrl
+require(otaManifestUrl == defaultOtaManifestUrl) {
+    "OTA manifest must point to the pinned binary-only LANU-LENS-OTA repository"
 }
 
 android {
@@ -35,7 +40,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "2.0.6"
+        versionName = "2.0.7"
         buildConfigField("String", "OTA_MANIFEST_URL", "\"$otaManifestUrl\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
