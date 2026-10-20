@@ -72,3 +72,9 @@ test('CI refuses partial production signing or partially configured publisher',(
   assert.match(workflow,/Production OTA is only allowed with all signing secrets/);
   assert.match(workflow,/\$SIGNED.*== "true".*\$PUBLIC_TOKEN/);
 });
+
+test('both debug and production Android variants are compiled and linted on each PR',()=>{
+  assert.match(workflow,/gradle assembleDebug assembleDebugAndroidTest assembleRelease lintDebug lintRelease --no-daemon/);
+  assert.match(workflow,/OTA imzalama koşulları/);
+  assert.match(workflow,/if: github\.event_name != 'pull_request'/);
+});
