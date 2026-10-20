@@ -40,7 +40,20 @@ function handlerFor(broker){
       res.setHeader('Vary','Origin');
     }
     if(req.method==='OPTIONS'){
-      res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
+      // Preflight is granted ONLY for known routes from our app origin.
+      // An OPTIONS request with a forged/absent Origin or unexpected method
+      // must not look like an approved CORS policy.
+      const method=req.headers['access-control-request-method'];
+      if(origin!==TRUSTED_ORIGIN || method!=='POST' ||
+         !Object.hasOwn(routes,req.url||'')){
+        respond(res,403,{error:'forbidden_origin'});return;
+      }
+      const requested=(req.headers['access-control-request-headers']||'').toLowerCase()
+        .split(',').map(v=>v.trim()).filter(Boolean);
+      if(requested.some(header=>header!=='authorization'&&header!=='content-type')){
+        respond(res,403,{error:'forbidden_headers'});return;
+      }
+      res.setHeader('Access-Control-Allow-Methods','POST');
       res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');
       res.setHeader('Access-Control-Max-Age','600');
       respond(res,200,{ok:true});return;
@@ -52,6 +65,11 @@ function handlerFor(broker){
       respond(res,404,{error:'not_found'});return;
     }
     const route=routes[req.url];
+    const declaredLength=req.headers['content-length'];
+    if(declaredLength!==undefined &&
+       (!/^[0-9]{1,9}$/.test(declaredLength) || Number(declaredLength)>MAX_BODY)){
+      respond(res,413,{error:'request_too_large'});return;
+    }
     const contentType=req.headers['content-type']||'';
     if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(contentType)){
       respond(res,415,{error:'json_required'});return;
