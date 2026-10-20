@@ -138,7 +138,10 @@ test('production OTA cert validates both installed and downloaded APK',()=>{
 
 test('debug and unpinned APKs cannot advertise update availability or install a cached package',()=>{
   assert.match(java,/boolean productionOtaConfigured\(\)/);
-  assert.ok(java.includes('!BuildConfig.DEBUG && BuildConfig.OTA_RELEASE_CERT_SHA256.matches'));
+  assert.ok(java.includes('!BuildConfig.DEBUG && isFeedUrl(BuildConfig.OTA_MANIFEST_URL)'));
+  assert.ok(java.includes('&& installedSignerMatchesPinnedCert()'));
+  assert.ok(java.includes('getPackageInfo(activity.getPackageName(),flags)'));
+  assert.ok(java.includes('return matchesPinnedSigner(signers,BuildConfig.OTA_RELEASE_CERT_SHA256)'));
   assert.ok(java.includes('j.put("configured",productionOtaConfigured())'));
   assert.ok(java.includes('return productionOtaConfigured() && latest != null'));
   for(const method of ['void info()', 'void check()', 'private void download(boolean installAfterVerification)', 'void install()']){
@@ -155,4 +158,15 @@ test('production release CI compares real signed binary against pinned public ce
   assert.ok(workflow.includes('"$actual" != "$expected"'));
   assert.ok(workflow.includes('Refusing release.'));
   assert.ok(workflow.indexOf('Refusing release.') < workflow.indexOf('Releases\'a APK ekle'));
+});
+
+test('OTA production gate checks actual installed signer before availability',()=>{
+ assert.match(java,/static boolean matchesPinnedSigner\(Signature\[\] signers,String pinnedSha256\)/);
+ assert.ok(java.includes('signers.length!=1'));
+ assert.ok(java.includes('MessageDigest.isEqual(actual.getBytes'));
+ assert.ok(java.includes('getApkContentsSigners()'));
+ assert.ok(java.includes('catch(PackageManager.NameNotFoundException|RuntimeException exception)'));
+ assert.ok(java.includes('installedSignerMatchesPinnedCert()'));
+ const smoke=fs.readFileSync('app/src/androidTest/java/com/lanu/sesli/SmokeInstrumentation.java','utf8');
+ assert.ok(smoke.includes('LanuUpdater.matchesPinnedSigner('));
 });
