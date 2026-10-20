@@ -74,7 +74,7 @@ test('version pinning prevents a remote older APK from being installed',()=>{
 test('production OTA feed is pinned by default before the public mirror exists',()=>{
   assert.match(gradle,/defaultOtaManifestUrl = "https:\/\/raw\.githubusercontent\.com\/kanunal99-jpg\/LANU-LENS-OTA\/main\/latest\.json"/);
   assert.match(gradle,/otaManifestUrl == defaultOtaManifestUrl/);
-  assert.match(gradle,/versionName = "2\.0\.7"/);
+  assert.match(gradle,/versionName = "2\.0\.8"/);
   assert.match(java,/Manifest HTTP status: 404/);
 });
 test('installer re-verifies the on-disk APK when the user taps install',()=>{
@@ -94,4 +94,27 @@ test('interrupted downloads preserve earlier valid build and isolate temp names'
   assert.doesNotMatch(java,/tmp\.delete\(\);dest\.delete\(\);/);
   assert.match(java,/if\(readyForInstall\(\)\)\s*\{/);
   assert.match(java,/if\(Thread\.currentThread\(\)\.isInterrupted\(\)\)/);
+});
+
+test('native update bridge revokes authorization on PIN lock, background and page navigation',()=>{
+  const main=fs.readFileSync('app/src/main/java/com/lanu/sesli/MainActivity.java','utf8');
+  assert.match(main,/boolean canShowUpdater\(\)/);
+  assert.match(main,/privateUnlocked && web != null/);
+  assert.match(main,/@JavascriptInterface public void setPrivateUnlocked\(boolean unlocked\)/);
+  assert.match(main,/privateUnlocked = unlocked && visible/);
+  assert.match(main,/visible = false;\s*privateUnlocked = false;/);
+  assert.match(main,/onPageStarted\(WebView v, String url/);
+  assert.match(main,/privateUnlocked = false;[\s\S]*onPageFinished/);
+  assert.match(main,/@JavascriptInterface public void install\(\) \{ main\.post\(\(\) -> \{ if \(canShowUpdater\(\)\)/);
+  assert.match(lens,/window\.LanuUpdate\.setPrivateUnlocked\(true\)/);
+  assert.match(lens,/window\.LanuUpdate\.setPrivateUnlocked\(false\)/);
+  assert.match(java,/if\(installAfterVerification && mayPromptUser\(\)\)install\(\)/);
+  assert.match(java,/if \(!mayPromptUser\(\)\) \{/);
+  assert.match(java,/private void openInstallerAfterValidation\(\)\{\s*if\(!mayPromptUser\(\)\)return;/);
+  assert.match(java,/private void openInstallerAfterValidation/);
+});
+test('manifest refresh bypasses stale intermediary caches',()=>{
+  assert.match(java,/c\.setUseCaches\(false\)/);
+  assert.match(java,/Cache-Control","no-cache, no-store"/);
+  assert.match(java,/Pragma","no-cache"/);
 });

@@ -26,15 +26,24 @@ if [[ ! "${expected_cert}" =~ ^[0-9a-f]{64}$ || "${actual_cert}" != "${expected_
   echo "::error::Android release signature does not match pinned fingerprint; refusing OTA publication"
   exit 1
 fi
-# Fail closed before uploading if the already-advertised manifest is newer.
-old_sha="$(gh api "repos/${repo}/contents/latest.json?ref=main" --jq .sha 2>/dev/null || true)"
-if [[ -n "${old_sha}" ]]; then
-  old_b64="$(gh api "repos/${repo}/contents/latest.json?ref=main" --jq .content | tr -d '\n')"
-  old_code="$(printf '%s' "${old_b64}" | base64 -d | jq -er '.versionCode | select(type=="number")' || true)"
+# Fail closed on public manifest API outages or permission errors. Only a
+# genuine GitHub 404 can mean an uninitialized binary-only repository.
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+old_sha=""
+if gh api "repos/${repo}/contents/latest.json?ref=main" > "${workdir}/previous.json" 2> "${workdir}/lookup.err"; then
+  old_sha="$(jq -er '.sha | select(type=="string" and length > 10)' "${workdir}/previous.json")"
+  old_b64="$(jq -er '.content | select(type=="string")' "${workdir}/previous.json" | tr -d '\n')"
+  old_code="$(printf '%s' "${old_b64}" | base64 -d | jq -er '.versionCode | select(type=="number" and . > 0)')"
   if [[ ! "${old_code}" =~ ^[0-9]+$ ]] || (( old_code >= GITHUB_RUN_NUMBER )); then
     echo "::error::OTA latest.json is malformed or already newer; refusing rollback"
     exit 1
   fi
+elif grep -Eq 'HTTP 404|HTTP 404[)]|Not Found [(]HTTP 404[)]' "${workdir}/lookup.err"; then
+  echo "::notice::First public manifest publication; latest.json does not exist yet."
+else
+  echo "::error::Cannot verify previous public OTA manifest (auth/network/API error); refusing publication."
+  exit 1
 fi
 
 filename="$(basename "${OTA_APK}")"
@@ -46,8 +55,6 @@ if gh release view "${tag}" --repo "${repo}" >/dev/null 2>&1; then
   echo "::error::Public tag already exists; do not silently replace a released APK"
   exit 1
 fi
-workdir="$(mktemp -d)"
-trap 'rm -rf "${workdir}"' EXIT
 printf '%s  %s\n' "${checksum}" "${filename}" > "${workdir}/SHA256SUMS.txt"
 gh release create "${tag}" "${OTA_APK}" "${workdir}/SHA256SUMS.txt" \
   --repo "${repo}" --title "Lanu Lens ${OTA_VERSION}" \

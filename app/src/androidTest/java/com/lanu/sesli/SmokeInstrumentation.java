@@ -37,6 +37,7 @@ public class SmokeInstrumentation extends Instrumentation {
             }
             if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
             verifyOtaDigestRejectsTampering(target);
+            assertUpdaterGate(target, false, "Locked camera must block native OTA");
             require(web, "location.origin === 'https://appassets.androidplatform.net'", "Secure asset origin");
             require(web, "!!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function'", "Microphone API available");
             require(web, "typeof window.LanuAudio.setCallActive === 'function'", "Trusted native bridge");
@@ -64,6 +65,7 @@ public class SmokeInstrumentation extends Instrumentation {
             long unlockLimit=System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
+            assertUpdaterGate(target, true, "PIN unlock must authorize native OTA");
             if (!"https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(BuildConfig.OTA_MANIFEST_URL))
                 throw new AssertionError("Pinned OTA feed must ship in every APK");
             require(web,"typeof window.LanuUpdate.info === 'function' && typeof window.LanuUpdate.check === 'function' && typeof window.LanuUpdate.install === 'function'","OTA native bridge exists");
@@ -80,6 +82,7 @@ public class SmokeInstrumentation extends Instrumentation {
             js(web,"document.getElementById('callsTab').click()");
             require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
+            assertUpdaterGate(target, false, "Relocking must revoke native OTA before installer");
             require(web,"!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)","No private hints after lock");
             // Exercise natural finger drift on the centered target where it
             // cannot be intercepted by Android's top-edge system gestures.
@@ -98,6 +101,20 @@ public class SmokeInstrumentation extends Instrumentation {
         } finally {
             if (activity != null) { final Activity target = activity; runOnMainSync(target::finish); }
         }
+    }
+    private void assertUpdaterGate(Activity target, boolean expected, String description) throws Exception {
+        // Wait for the JS-to-Java @JavascriptInterface call and its UI-thread
+        // relay to settle before asserting the trusted native permission state.
+        long limit=System.currentTimeMillis()+3000;
+        boolean granted=false;
+        while(System.currentTimeMillis()<limit){
+            final java.util.concurrent.atomic.AtomicReference<Boolean> value=new java.util.concurrent.atomic.AtomicReference<>();
+            runOnMainSync(()->value.set(((MainActivity)target).canShowUpdater()));
+            granted=Boolean.TRUE.equals(value.get());
+            if(granted==expected)return;
+            Thread.sleep(40);
+        }
+        throw new AssertionError(description+"; expected="+expected+" actual="+granted);
     }
     /** Same-size and truncated APK tampering must be detected before installer opens. */
     private static void verifyOtaDigestRejectsTampering(Activity target) throws Exception {

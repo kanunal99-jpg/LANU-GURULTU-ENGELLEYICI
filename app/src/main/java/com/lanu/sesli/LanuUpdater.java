@@ -62,6 +62,10 @@ final class LanuUpdater {
         try{return activity.getPackageManager().getPackageInfo(activity.getPackageName(),0).versionName;}
         catch(PackageManager.NameNotFoundException e){return "bilinmiyor";}
     }
+    private boolean mayPromptUser() {
+        return !destroyed && activity instanceof MainActivity
+                && ((MainActivity) activity).canShowUpdater();
+    }
     private void emit(String state, String message) {
         if (destroyed) return;
         JSONObject j=new JSONObject();
@@ -210,12 +214,15 @@ final class LanuUpdater {
                 else {
                     verified=dest;
                     emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");
-                    if(installAfterVerification)install();
+                    // A download can finish after the user locks the private
+                    // screen or backgrounds the app: NEVER surface an installer.
+                    if(installAfterVerification && mayPromptUser())install();
                 }
             });
         });
     }
     void install(){
+        if(!mayPromptUser())return; // Never launch from a locked/decoy screen.
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         if(!readyForInstall()){emit("error","Önce güncellemeyi indirip doğrula.");return;}
         busy=true;
@@ -241,11 +248,16 @@ final class LanuUpdater {
                     emit("error","Kurulumdan önce APK doğrulanamadı. Yeniden indirmen gerekiyor.");
                     return;
                 }
+                if (!mayPromptUser()) {
+                    emit("ready","APK doğrulandı. Kuruluma devam etmek için özel alanı aç.");
+                    return;
+                }
                 openInstallerAfterValidation();
             });
         });
     }
     private void openInstallerAfterValidation(){
+        if(!mayPromptUser())return;
         if(!activity.getPackageManager().canRequestPackageInstalls()){
             awaitingInstallPermission=true;
             emit("permission","Android'de Lanu Lens için ‘Bu kaynaktan izin ver’ seçeneğini aç.");
@@ -272,6 +284,7 @@ final class LanuUpdater {
         }
     }
     void releasePage(){
+        if(!mayPromptUser())return;
         try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(RELEASE_PAGE)));}
         catch(ActivityNotFoundException e){emit("error","Sürüm sayfası açılamadı.");}
     }
@@ -294,7 +307,11 @@ final class LanuUpdater {
     private static HttpsURLConnection connection(String url) throws Exception {
         URL u=new URL(url);HttpsURLConnection c=(HttpsURLConnection)u.openConnection();
         c.setConnectTimeout(10000);c.setReadTimeout(25000);
-        c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept","application/octet-stream");
+        c.setInstanceFollowRedirects(false);
+        c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control","no-cache, no-store");
+        c.setRequestProperty("Pragma","no-cache");
+        c.setRequestProperty("Accept","application/octet-stream");
         return c;
     }
     private static byte[] readSmall(String url) throws Exception {

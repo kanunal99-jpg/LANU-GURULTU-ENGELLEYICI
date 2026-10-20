@@ -40,7 +40,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "2.0.7"
+        versionName = "2.0.8"
         buildConfigField("String", "OTA_MANIFEST_URL", "\"$otaManifestUrl\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }

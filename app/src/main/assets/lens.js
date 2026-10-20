@@ -114,6 +114,9 @@
       try{storage().removeItem('lens-failures');storage().removeItem('lens-delay');}catch(_){}
       allowIncoming=data.incomingEnabled!==false;try{storage().setItem('lens-listen',String(allowIncoming));}catch(_){allowIncoming=false;}$('incomingEnabled').checked=allowIncoming;
       opened=true;$('gate').hidden=true;$('cameraView').hidden=true;$('privateView').hidden=false;
+      // Bridge messages are ordered on the native main thread; grant update
+      // access only after a successful PIN unlock, before the first check.
+      if(window.LanuUpdate && typeof window.LanuUpdate.setPrivateUnlocked==='function')window.LanuUpdate.setPrivateUnlocked(true);
       $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();touch();
       if(calls())calls().activate();
       // Best-effort version check after PIN entry, never before unlocking.
@@ -131,6 +134,8 @@
     try{if(window.LanuAudio && typeof window.LanuAudio.hideKeyboard==='function')window.LanuAudio.hideKeyboard();}catch(_){}
   }
   function lock(listen = true) {
+    // Revoke native updater permission before clearing private UI.
+    if(window.LanuUpdate && typeof window.LanuUpdate.setPrivateUnlocked==='function')window.LanuUpdate.setPrivateUnlocked(false);
     dismissKeyboard();gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
     if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
     $('privateView').hidden=$('gate').hidden=true;$('codeChangeConfirm').hidden=true;$('cameraView').hidden=false;
