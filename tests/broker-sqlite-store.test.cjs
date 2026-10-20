@@ -79,7 +79,7 @@ test('failed durable writes never enroll a ghost device, grant consent or revoke
   store.revoke=revoke;
   const nonce=store.consumeInviteNonce.bind(store);
   store.consumeInviteNonce=()=>{throw Error('DB unavailable');};
-  await assert.rejects(()=>broker.submitInvite(a,await Auth.signInvite(webcrypto,alice,bob.deviceId)),/DB unavailable/);
+  await assert.rejects(async()=>broker.submitInvite(a,await Auth.signInvite(webcrypto,alice,bob.deviceId)),/DB unavailable/);
   assert.equal(broker.pending.size,0);
   store.consumeInviteNonce=nonce;
  }finally{if(store)store.close();temp.close();}
