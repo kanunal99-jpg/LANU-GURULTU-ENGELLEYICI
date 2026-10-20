@@ -47,7 +47,7 @@
     if(bundle.length>MAX_FILE)throw Error('Encrypted backup exceeds limit');
     return bundle;
   }
-  async function importBackup({storage,crypto,pin,passphrase,serialized}){
+  async function importBackup({storage,crypto,pin,passphrase,serialized,canCommit=()=>true}){
     preflight(storage,crypto,passphrase);
     if(storage.getItem(ROOT)!==null)throw Error('Existing PIN vault must never be overwritten');
     if(typeof serialized!=='string'||serialized.length>MAX_FILE)throw Error('Backup file too large');
@@ -71,6 +71,7 @@
     // Recheck destination after expensive KDFs: this must not race an
     // existing or newly-created PIN vault.
     if(storage.getItem(ROOT)!==null)throw Error('Existing PIN vault must never be overwritten');
+    if(!canCommit())throw Error('Cancelled');
     const previousRoute=storage.getItem(ROUTE);
     try{
       if(data.routingId!==null)storage.setItem(ROUTE,data.routingId);
