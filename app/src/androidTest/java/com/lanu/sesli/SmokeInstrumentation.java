@@ -63,6 +63,8 @@ public class SmokeInstrumentation extends Instrumentation {
             long unlockLimit=System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
+            if (!"https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(BuildConfig.OTA_MANIFEST_URL))
+                throw new AssertionError("Pinned OTA feed must ship in every APK");
             require(web,"typeof window.LanuUpdate.info === 'function' && typeof window.LanuUpdate.check === 'function' && typeof window.LanuUpdate.install === 'function'","OTA native bridge exists");
             require(web,"typeof window.LanuUpdate.downloadAndInstall === 'function'","One-tap native OTA bridge exists");
             require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab defaults visible");
