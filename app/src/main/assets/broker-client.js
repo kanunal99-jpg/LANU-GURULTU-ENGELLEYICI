@@ -13,11 +13,11 @@
    if(typeof fetchApi!=='function'||!(cryptoApi && cryptoApi.subtle)||!indexedDb||!AUTH||!KEY_STORE)
      throw Error('Secure browser and device identity required');
    const store=KEY_STORE.create(indexedDb);
-   let token=null,deviceId=null;
-   function expire(){token=null;deviceId=null;}
+   let token=null,deviceId=null,sessionExpiresAt=0;
+   function expire(){token=null;deviceId=null;sessionExpiresAt=0;}
    async function request(path,body,bearer){
      if(!/^\/v1\/[a-z/]+$/.test(path))throw Error('Invalid broker API route');
-     if(bearer && !token)throw Error('Authentication required');
+     if(bearer)ensure();
      const url=baseUrl.slice(0,-1)+path;
      const res=await fetchApi(url,{
        method:'POST',mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
@@ -65,9 +65,14 @@
      if(typeof result.token!=='string'||!id.test(result.token)||result.ttlSeconds!==900)
        throw Error('Invalid session');
      token=result.token;deviceId=identity.deviceId;
+     sessionExpiresAt=clock()+result.ttlSeconds*1000;
      return identity.deviceId;
    }
-   function ensure(){if(!deviceId||!token)throw Error('Authentication required');}
+   function ensure(){
+     if(!deviceId||!token||!Number.isSafeInteger(sessionExpiresAt)||clock()>=sessionExpiresAt){
+       expire();throw Error('Authentication required');
+     }
+   }
    async function pendingPairings(){ensure();return (await request('/v1/pairs/pending',{},true)).requests;}
    async function requestPairing(recipientId){ensure();if(!id.test(recipientId)||recipientId===deviceId)throw Error('Invalid recipient');return request('/v1/pairs/request',{recipientId},true);}
    async function approvePairing(requestId,expectedRequesterFingerprint){
