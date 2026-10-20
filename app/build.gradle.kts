@@ -3,12 +3,13 @@ plugins { id("com.android.application") }
 android {
     namespace = "com.lanu.sesli"
     compileSdk = 35
+    buildFeatures { buildConfig = true }
     defaultConfig {
         applicationId = "com.lanu.sesli"
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "2.0.3"
+        versionName = "2.0.4"\n        buildConfigField("String", "OTA_MANIFEST_URL", "\\\"" + (providers.environmentVariable("LANU_OTA_MANIFEST_URL").orNull ?: "").replace("\\", "\\\\").replace("\\"", "\\\\"") + "\\\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
     compileOptions {
