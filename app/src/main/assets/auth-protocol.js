@@ -63,6 +63,17 @@
     const bytes = await api.subtle.sign({name:'ECDSA',hash:'SHA-256'},identity.privateKey,message(body));
     return {body,signature:hex(bytes)};
   }
+  async function signChallenge(api, identity, purpose, nonce) {
+    requireCrypto(api);
+    if (!identity || !identity.privateKey || !identity.publicKey ||
+        !isId(identity.deviceId) || !isNonce(nonce) ||
+        !['ENROLL','LOGIN'].includes(purpose) ||
+        await fingerprint(api,identity.publicKey) !== identity.deviceId)
+      throw new Error('Invalid device challenge');
+    const payload=text('LANU_DEVICE_'+purpose+'_V1\n'+identity.deviceId+'\n'+nonce);
+    const signature=await api.subtle.sign({name:'ECDSA',hash:'SHA-256'},identity.privateKey,payload);
+    return hex(signature);
+  }
   class ReplayCache {
     constructor(limit = 1024) { this.records = new Map(); this.limit=limit; }
     accept(key, expiry, now) {
@@ -86,7 +97,7 @@
       return replay.accept(b.from+':'+b.nonce,b.expiresAt,now);
     } catch (_) { return false; }
   }
-  const api=Object.freeze({generate,loadOrCreate,signInvite,verifyInvite,ReplayCache});
+  const api=Object.freeze({generate,loadOrCreate,signInvite,signChallenge,verifyInvite,ReplayCache});
   root.LanuAuthProtocol=api;
   if (typeof module !== 'undefined') module.exports=api;
 })(typeof window !== 'undefined' ? window : globalThis);
