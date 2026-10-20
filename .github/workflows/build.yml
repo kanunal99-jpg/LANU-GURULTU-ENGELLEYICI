@@ -17,6 +17,7 @@ jobs:
     env:
       LANU_VERSION_CODE: ${{ github.run_number }}
       LANU_OTA_MANIFEST_URL: ${{ vars.LANU_OTA_MANIFEST_URL }}
+      LANU_RELEASE_CERT_SHA256: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
     permissions:
       contents: write
     steps:

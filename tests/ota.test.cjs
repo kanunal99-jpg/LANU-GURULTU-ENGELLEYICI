@@ -29,7 +29,7 @@ test('OTA is opt-in and private repo secrets are never embedded in the app',()=>
 test('APK must pass SHA-256, package, signing-certificate and higher-code checks',()=>{
   assert.match(java,/MessageDigest\.getInstance\("SHA-256"\)/);
   assert.match(java,/MessageDigest\.isEqual/);
-  assert.match(java,/validatePackage\(tmp,next\.code\)/);
+  assert.match(java,/validatePackage\(tmp,next\.code,next\.version\)/);
   assert.match(java,/archive\.packageName/);
   assert.match(java,/GET_SIGNING_CERTIFICATES/);
   assert.match(java,/archive\.signingInfo\.getApkContentsSigners\(\)/);
@@ -82,8 +82,8 @@ test('installer re-verifies the on-disk APK when the user taps install',()=>{
   assert.match(java,/void openInstallerAfterValidation\(\)\s*\{/);
   assert.match(java,/new java\.io\.FileInputStream\(file\)/);
   assert.match(java,/APK changed after verification/);
-  assert.match(java,/validatePackage\(file,candidate\.code\)/);
-  assert.ok(java.indexOf('validatePackage(file,candidate.code)')<java.indexOf('openInstallerAfterValidation();'));
+  assert.match(java,/validatePackage\(file,candidate\.code,candidate\.version\)/);
+  assert.ok(java.indexOf('validatePackage(file,candidate.code,candidate.version)')<java.indexOf('openInstallerAfterValidation();'));
   assert.match(java,/verified!=file/);
   assert.match(java,/busy=true;\s*emit\("verifying"/);
   assert.match(lens,/\['checking','downloading','verifying','installing'\]\.includes/);
@@ -117,4 +117,21 @@ test('manifest refresh bypasses stale intermediary caches',()=>{
   assert.match(java,/c\.setUseCaches\(false\)/);
   assert.match(java,/Cache-Control","no-cache, no-store"/);
   assert.match(java,/Pragma","no-cache"/);
+});
+
+test('OTA manifest URL is pinned and update tag binds versionCode',()=>{
+  assert.ok(java.includes('"https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(url)'));
+  assert.ok(java.includes('isExpectedReleaseUrl(url,version,code)'));
+  assert.ok(java.includes('OTA_REPO_PATH+"v"+version+"-build"+code'));
+  assert.ok(java.includes('u.getQuery()==null && u.getRef()==null'));
+});
+test('production OTA cert validates both installed and downloaded APK',()=>{
+  assert.ok(gradle.includes('LANU_RELEASE_CERT_SHA256'));
+  assert.ok(gradle.includes('OTA_RELEASE_CERT_SHA256'));
+  assert.ok(java.includes('BuildConfig.OTA_RELEASE_CERT_SHA256'));
+  assert.ok(java.includes('MessageDigest.getInstance("SHA-256").digest(sig.toByteArray())'));
+  assert.ok(java.includes('for(Signature sig:proposed)'));
+  assert.ok(java.includes('for(Signature sig:existing)'));
+  assert.ok(java.includes('wantedVersion.equals(archive.versionName)'));
+  assert.ok(java.includes('u.getPort()!=443'));
 });
