@@ -161,11 +161,19 @@ final class LanuUpdater {
                 if(tmp.exists()&&!tmp.delete())throw new IllegalStateException("Cannot clean temp");
                 MessageDigest digest=MessageDigest.getInstance("SHA-256");
                 long total=0;
+                int lastPercent=0;
                 try(InputStream input=openApk(next.url);FileOutputStream out=new FileOutputStream(tmp)){
                     byte[] buffer=new byte[32768];int n;
                     while((n=input.read(buffer))!=-1){
+                        if(Thread.currentThread().isInterrupted())throw new java.io.InterruptedIOException("Cancelled update");
                         if(total+n>MAX_APK||total+n>next.size)throw new IllegalArgumentException("Unexpected APK length");
                         digest.update(buffer,0,n);out.write(buffer,0,n);total+=n;
+                        int percent=(int)((total*100)/next.size);
+                        if(percent>=lastPercent+10 && percent<100){
+                            lastPercent=percent;
+                            final int shown=percent;
+                            main.post(()->{if(!destroyed)emit("downloading","APK indiriliyor: %"+shown);});
+                        }
                     }
                     out.getFD().sync();
                 }
