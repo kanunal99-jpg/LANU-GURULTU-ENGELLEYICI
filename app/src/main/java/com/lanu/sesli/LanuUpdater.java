@@ -74,10 +74,24 @@ final class LanuUpdater {
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
-    void info(){emit("info","Yüklü sürüm: "+installedVersion()+" (kod "+installedCode()+")");}
+    private boolean readyForInstall() {
+        return latest != null && latest.code > installedCode()
+                && verified != null && verified.isFile() && verified.length() == latest.size;
+    }
+    private static boolean sameCandidate(Candidate a, Candidate b) {
+        return a != null && b != null && a.code == b.code && a.size == b.size
+                && a.sha.equals(b.sha) && a.url.equals(b.url) && a.version.equals(b.version);
+    }
+    void info() {
+        if (readyForInstall()) emit("ready","Önceden doğrulanmış güncelleme hazır. Kurulum için onayla.");
+        else emit("info","Yüklü sürüm: "+installedVersion()+" (kod "+installedCode()+")");
+    }
     void check(){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
-        latest=null;verified=null;
+        // Keep previously verified APK across tab changes and the Android
+        // unknown-sources permission screen, which locks the private UI.
+        final Candidate previous = latest;
+        final File previousApk = verified;
         String feed=BuildConfig.OTA_MANIFEST_URL;
         if(feed.isEmpty()){
             emit("not_configured","Güvenli OTA dağıtım adresi henüz kurulmadı. Özel GitHub deposundaki APK anonim indirilemez.");
@@ -108,14 +122,32 @@ final class LanuUpdater {
             final Candidate candidate=found;final String failure=error;
             main.post(()->{
                 if(destroyed)return;
-                busy=false;latest=candidate;
-                if(failure!=null)emit("error",failure);
-                else if(candidate.code>installedCode())emit("available","Yeni sürüm bulundu: "+candidate.version+". İndirmek için onayla.");
-                else emit("current","Uygulaman güncel. Kurulu sürüm: "+installedVersion());
+                busy=false;
+                if(failure!=null) {
+                    if (previousApk != null && previousApk.isFile() && previous != null
+                            && previous.code > installedCode() && previousApk.length() == previous.size) {
+                        latest=previous;verified=previousApk;
+                        emit("ready","Ağ denetimi başarısız; önceden doğrulanmış güncelleme hâlâ hazır.");
+                    } else {
+                        latest=null;verified=null;emit("error",failure);
+                    }
+                } else {
+                    latest=candidate;
+                    verified=sameCandidate(previous,candidate) && previousApk!=null
+                            && previousApk.isFile() && previousApk.length()==candidate.size ? previousApk : null;
+                    if(candidate.code>installedCode()) {
+                        if(readyForInstall())emit("ready","Güncelleme "+candidate.version+" daha önce doğrulandı; kuruluma hazır.");
+                        else emit("available","Yeni sürüm bulundu: "+candidate.version+". İndirmek için onayla.");
+                    } else {
+                        verified=null;emit("current","Uygulaman güncel. Kurulu sürüm: "+installedVersion());
+                    }
+                }
             });
         });
     }
-    void download(){
+    void download(){download(false);}
+    void downloadAndInstall(){download(true);}
+    private void download(boolean installAfterVerification){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
         Candidate next=latest;
         if(next==null||next.code<=installedCode()){emit("error","Önce güncelleme denetimi yap.");return;}
@@ -153,13 +185,17 @@ final class LanuUpdater {
                 if(destroyed)return;
                 busy=false;
                 if(failure!=null){verified=null;emit("error",failure);}
-                else {verified=dest;emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");}
+                else {
+                    verified=dest;
+                    emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");
+                    if(installAfterVerification)install();
+                }
             });
         });
     }
     void install(){
         if(busy){emit("busy","Önceki işlem devam ediyor.");return;}
-        if(verified==null||!verified.isFile()||latest==null){emit("error","Önce güncellemeyi indirip doğrula.");return;}
+        if(!readyForInstall()){emit("error","Önce güncellemeyi indirip doğrula.");return;}
         if(!activity.getPackageManager().canRequestPackageInstalls()){
             awaitingInstallPermission=true;
             emit("permission","Android'de Lanu Lens için ‘Bu kaynaktan izin ver’ seçeneğini aç.");
