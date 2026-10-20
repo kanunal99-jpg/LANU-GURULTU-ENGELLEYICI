@@ -68,12 +68,12 @@ test('tampered backup fields, ciphertext, oversized input and malicious routing 
 });
 test('storage quota error cannot leave restored route behind when vault write fails',async()=>{
  const source=await prepared(),bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
- const dest=storage();dest.setItem('lanuId','111111');
+ const dest=storage();dest.setItem('lanuId','987654');
  const originalSet=dest.setItem.bind(dest);
  dest.setItem=(key,value)=>{if(key==='lens-vault-v1')throw Error('QuotaExceeded');originalSet(key,value);};
  await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle}),/QuotaExceeded/);
  assert.equal(dest.getItem('lens-vault-v1'),null);
- assert.equal(dest.getItem('lanuId'),'111111');
+ assert.equal(dest.getItem('lanuId'),'987654');
 });
 
 test('background/PIN-gate cancellation after slow KDF prevents writing any restored data',async()=>{
@@ -143,4 +143,15 @@ test('SAF export verifies full ciphertext by reopening the picked document befor
  assert.ok(section.includes('java.util.Arrays.fill(bytes,(byte)0)'));
  assert.ok(section.includes('backupResult("save",verified)'));
  assert.equal(section.includes('out.flush();ok=true;'),false,'No unverified write-only success');
+});
+
+
+test('restore cannot overwrite a preexisting, different six-digit routing identity',async()=>{
+ const source=await prepared();
+ const bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const dest=storage();dest.setItem('lanuId','123456');
+ await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,
+    pin:'741963',passphrase,serialized:bundle}),/Routing identity conflict/);
+ assert.equal(dest.getItem('lanuId'),'123456');
+ assert.equal(dest.getItem('lens-vault-v1'),null);
 });
