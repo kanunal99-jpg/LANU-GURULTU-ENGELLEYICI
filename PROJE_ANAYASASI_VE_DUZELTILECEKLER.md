@@ -222,3 +222,40 @@ Eski **debug imzalı** APK'nın uygulama verileri, farklı kalıcı **production
 - [ ] P-256 **nonextractable** cihaz özel anahtarı taşınmaz: güvenilir sunucu üstünden ayrı yeni cihaz enrollment ve eski cihaz iptali gerekir.
 
 **Bu PR üretim puanını artırmaz.** OTA 14/15 için kalıcı anahtar + public mirror + gerçek dosya aktarımı ve iki cihaz kabul kanıtı hâlâ gerekir.
+
+---
+
+## 20.10.2026 — Hızlandırılmış 4 kollu kimlik/OTA sprinti ve dürüst puan tablosu
+
+### Anayasada teslim durumu — kanıt dışı puan artırma yasaktır
+- **PR #46 — tamam:** AES-GCM ile ayrı parolalı şifreli PIN/rehber/6 haneli kod aktarım biçimi, bozuk dosya/yanlış PIN/üzerine yazma negatif testleri. CI başarılı, `main` dalına alındı.
+- **PR #48 — tamam:** Android SAF `ACTION_CREATE_DOCUMENT`/`ACTION_OPEN_DOCUMENT` dosya seçicisi, PIN arkasında export, ilk kurulumda restore, güvenli boyut/yaşam döngüsü kontrolleri. CI başarılı, `main` dalına alındı. **İki fiziksel cihaz üzerinde debug→production veri aktarımı henüz denenmedi.**
+- **PR #49 — tamam:** Kalıcı SQLite sunucu cihaz/açık anahtar kaydı, iki taraflı eşleştirme onayı, cihaz iptali ve kullanılmış davet nonce koruması. Yeniden başlatma, DB bozulması, kayıt reddi ve yetki kaybı test edildi; CI başarılı, `main` dalına alındı. Yalnız **tek sunucu örneği** ve Node 22 deneysel SQLite için.
+- **PR #50 — CI sonucu açık:** Android 10/API 29 ve Android 15/API 35 emülatör kapıları, Google servisleri kapalıyken uyumluluk ve erken JS syntax check. AOSP API 29 görüntüsü ilk koşuda JS başlangıç sorunu, ikinci koşuda SDK zip indirme hatası gösterdi. Güncel deneme izlenir; Huawei/Xiaomi/Samsung fiziksel testi değildir.
+- **PR #51 — CI sonucu açık:** Kimlik için daraltılmış REST endpoint'leri, imzalı enrollment/login, alıcı onayı/çağrı/iptal HTTP API, origin allowlist, bearer, body limit; SQLite-backed yalnız Unix socket dinleyicisi ve TLS proxy dağıtım rehberi. **Gerçek sunucu/HTTPS/FCM devreye alınmadı.**
+- **PR #52 — CI sonucu açık:** Şifreli dışa aktarım için yedek parolası tekrar girişi ve SAF kaydetmeden önce bağımsız AES-GCM decrypt + orijinal PIN doğrulaması. Fiziksel dosya sağlayıcı yazım kanıtı ayrıca gerekir.
+
+### Ağırlıklı puan — üretim kullanımı dahil dürüst mühendislik tahmini
+
+| Alt sistem | Eski gözlem | Şimdi (PR #46/#48/#49 doğrulandı) | Yeni PR CI+merge başarılı olursa | Gerçek premium hedef |
+|---|---:|---:|---:|---:|
+| İşlevler | 11/15 | 11/15 | 11/15 | 14/15 |
+| Güvenlik ve veri koruma | 15/20 | 16/20 | 17/20 | 19/20 |
+| Kimlik + arka plan çağrısı | 4/15 | 6/15 | 8/15 | 14/15 |
+| OTA + üretim güncellemeleri | 7/15 | 10/15 | 10/15 | 14/15 |
+| Mimari/UX/erişilebilirlik | 9/15 | 9/15 | 9/15 | 14/15 |
+| CI/otomatik test | 9/10 | 10/10 | 10/10 | 9/10 |
+| Fiziksel cihaz kabul | 1/10 | 1/10 | 1/10 | 9/10 |
+| **Toplam** | **56/100** | **63/100** | **66/100 (tahmin)** | **93/100** |
+
+Bu puanlar dış denetim veya üretim sertifikasyonu değildir; CI testleri üretici gerçek cihazlarının yerini tutmaz. PR #50 başarısızken Google servissiz Android 10 uyumluluğu **kanıtlanmış değildir**.
+
+### 70+ ve 80+ puanına sıçramak için gerçek üretim engelleri
+1. **Kimlik:** TLS üzerinde çalışan sunucu + server-scoped secrets ve revocation + PIN/Android cihaz anahtarının imzalı challenge ile doğrudan bağlanması; sahte kullanıcılar çağrı gönderememeli.
+2. **FCM + GMS olmayan cihaz fallback:** Google servisleri olan cihazlarda FCM yüksek öncelik; GMS olmayan Huawei cihazlarında dağıtım/alternatif bildirim stratejisi açıkça ayrı kabul. Arka plandaki gerçek ses çağrısı için Doze, bildirim izni ve mikrofon sınırı.
+3. **OTA:** Sahibinde kalıcı signing keystore ve kurtarma kopyası, GitHub Secrets, yalnız APK içeren bağımsız public repo, sertifika pin, 2 gerçek Android'de farklı ağda sıralı aynı-signer yerinde güncelleme.
+4. **Veri göçü:** Eski debug'dan şifreli yedeği kaydet ve dosyayı test et; ancak bundan sonra imzası farklı yeni üretim APK'sında PIN/rehber/kişisel kod restore et. Kullanıcı onayı olmadan eski veriyi silmek YASAK.
+5. **Android modernizasyonu:** Kotlin Coroutines/Flow, Hilt, Compose/MVVM, Crashlytics ve üretim performans/test disiplinine kanıtlı, veri göçünü bozmayan aşamalı geçiş.
+6. **Gerçek cihazlar:** Samsung, Xiaomi, Huawei (GMS var/yok), Android 8–15, Bluetooth, farklı ağ, ekran kilidi, Doze, 403/500/offline ve force-stop test matrisi; yalnız emulator yetmez.
+
+**Sabit ürün ilkesi:** Kullanıcı tekrar söylemese dahi verilen oturumda kod, test, build, GitHub PR/release ve doğrulama döngüsü tamamlanabildiği kadar ilerletilir; desteklenmeyen sır, servis, fiziksel cihaz ve kalıcı imza oluşturulmuş gibi asla gösterilmez.
