@@ -10,7 +10,7 @@
       baseUrl.includes('..')||baseUrl.includes('appassets.androidplatform.net')||
       baseUrl.length>160)
      throw Error('Pinned HTTPS broker origin required');
-   if(typeof fetchApi!=='function'||!cryptoApi?.subtle||!indexedDb||!AUTH||!KEY_STORE)
+   if(typeof fetchApi!=='function'||!(cryptoApi && cryptoApi.subtle)||!indexedDb||!AUTH||!KEY_STORE)
      throw Error('Secure browser and device identity required');
    const store=KEY_STORE.create(indexedDb);
    let token=null,deviceId=null;
@@ -25,7 +25,7 @@
          ...(bearer?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)
      });
      if(!res||res.redirected||res.status!==200||
-        !/^application\/json(?:;|$)/i.test(res.headers?.get('content-type')||'')){
+        !/^application\/json(?:;|$)/i.test((res.headers && res.headers.get('content-type'))||'')){
        if(bearer)expire();
        throw Error('Secure broker request was rejected');
      }
@@ -56,7 +56,7 @@
    async function signIn(){
      expire();
      const identity=await store.load();
-     if(!identity||identity.privateKey?.extractable!==false ||
+     if(!identity||(!identity.privateKey || identity.privateKey.extractable!==false) ||
         !id.test(identity.deviceId))throw Error('Device enrollment missing');
      const challenge=await request('/v1/session/challenge',{deviceId:identity.deviceId},false);
      assertChallenge(challenge,'LOGIN',identity.deviceId);
