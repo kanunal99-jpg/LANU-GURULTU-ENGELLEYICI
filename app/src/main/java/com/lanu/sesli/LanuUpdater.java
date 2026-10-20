@@ -225,19 +225,7 @@ final class LanuUpdater {
         io.execute(()->{
             boolean valid=false;
             try{
-                MessageDigest digest=MessageDigest.getInstance("SHA-256");
-                long total=0;
-                try(InputStream input=new java.io.FileInputStream(file)){
-                    byte[] buffer=new byte[32768];int n;
-                    while((n=input.read(buffer))!=-1){
-                        total+=n;
-                        if(total>candidate.size)throw new SecurityException("APK size changed");
-                        digest.update(buffer,0,n);
-                    }
-                }
-                if(total!=candidate.size || !MessageDigest.isEqual(
-                        hex(digest.digest()).getBytes(StandardCharsets.US_ASCII),
-                        candidate.sha.getBytes(StandardCharsets.US_ASCII)))
+                if(!matchesDigest(file,candidate.size,candidate.sha))
                     throw new SecurityException("APK changed after verification");
                 validatePackage(file,candidate.code);
                 valid=true;
@@ -341,6 +329,26 @@ final class LanuUpdater {
         }
         throw new SecurityException("Too many redirects");
     }
+    /** Re-reads cached bytes on every install; also exercised in Android emulator. */
+    static boolean matchesDigest(File file,long expectedSize,String expectedSha) throws Exception {
+        if(file==null||expectedSize<1024||expectedSize>MAX_APK
+                ||expectedSha==null||!expectedSha.matches("[0-9a-f]{64}")
+                ||!file.isFile()||file.length()!=expectedSize)return false;
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        long total=0;
+        try(InputStream input=new java.io.FileInputStream(file)){
+            byte[] buffer=new byte[32768];int n;
+            while((n=input.read(buffer))!=-1){
+                total+=n;
+                if(total>expectedSize)return false;
+                digest.update(buffer,0,n);
+            }
+        }
+        return total==expectedSize && MessageDigest.isEqual(
+                hex(digest.digest()).getBytes(StandardCharsets.US_ASCII),
+                expectedSha.getBytes(StandardCharsets.US_ASCII));
+    }
+
     private static String hex(byte[] b){
         char[] out=new char[b.length*2], alphabet="0123456789abcdef".toCharArray();
         for(int i=0;i<b.length;i++){out[i*2]=alphabet[(b[i]&255)>>>4];out[i*2+1]=alphabet[b[i]&15];}
