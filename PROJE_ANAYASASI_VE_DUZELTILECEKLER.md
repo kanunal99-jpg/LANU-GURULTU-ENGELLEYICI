@@ -231,13 +231,13 @@ Eski **debug imzalı** APK'nın uygulama verileri, farklı kalıcı **production
 - **PR #46 — tamam:** AES-GCM ile ayrı parolalı şifreli PIN/rehber/6 haneli kod aktarım biçimi, bozuk dosya/yanlış PIN/üzerine yazma negatif testleri. CI başarılı, `main` dalına alındı.
 - **PR #48 — tamam:** Android SAF `ACTION_CREATE_DOCUMENT`/`ACTION_OPEN_DOCUMENT` dosya seçicisi, PIN arkasında export, ilk kurulumda restore, güvenli boyut/yaşam döngüsü kontrolleri. CI başarılı, `main` dalına alındı. **İki fiziksel cihaz üzerinde debug→production veri aktarımı henüz denenmedi.**
 - **PR #49 — tamam:** Kalıcı SQLite sunucu cihaz/açık anahtar kaydı, iki taraflı eşleştirme onayı, cihaz iptali ve kullanılmış davet nonce koruması. Yeniden başlatma, DB bozulması, kayıt reddi ve yetki kaybı test edildi; CI başarılı, `main` dalına alındı. Yalnız **tek sunucu örneği** ve Node 22 deneysel SQLite için.
-- **PR #50 — CI sonucu açık:** Android 10/API 29 ve Android 15/API 35 emülatör kapıları, Google servisleri kapalıyken uyumluluk ve erken JS syntax check. AOSP API 29 görüntüsü ilk koşuda JS başlangıç sorunu, ikinci koşuda SDK zip indirme hatası gösterdi. Güncel deneme izlenir; Huawei/Xiaomi/Samsung fiziksel testi değildir.
-- **PR #51 — CI sonucu açık:** Kimlik için daraltılmış REST endpoint'leri, imzalı enrollment/login, alıcı onayı/çağrı/iptal HTTP API, origin allowlist, bearer, body limit; SQLite-backed yalnız Unix socket dinleyicisi ve TLS proxy dağıtım rehberi. **Gerçek sunucu/HTTPS/FCM devreye alınmadı.**
-- **PR #52 — CI sonucu açık:** Şifreli dışa aktarım için yedek parolası tekrar girişi ve SAF kaydetmeden önce bağımsız AES-GCM decrypt + orijinal PIN doğrulaması. Fiziksel dosya sağlayıcı yazım kanıtı ayrıca gerekir.
+- **PR #50 — CI sonucu açık:** Android 10/API 29 ve Android 15/API 35 emülatör kapıları, Google servisleri kapalıyken uyumluluk ve erken JS syntax check. Android 10 Chrome 74 üzerinde PeerJS kütüphanesinin iki adet desteklenmeyen optional chaining sözdizimi kök neden olarak saptandı, yalnız bu iki kullanım değiştirildi ve orijinal vendor SHA-256 karşılaştırması korundu. CI sonucu hâlâ açık; Huawei/Xiaomi/Samsung fiziksel testi değildir.
+- **PR #51 — tamam, CI başarılı ve main'e birleştirildi:** Kimlik için daraltılmış REST endpoint'leri, imzalı enrollment/login, alıcı onayı/çağrı/iptal HTTP API, origin allowlist, bearer, body limit; SQLite-backed yalnız Unix socket dinleyicisi ve TLS proxy dağıtım rehberi. **Gerçek sunucu/HTTPS/FCM devreye alınmadı.**
+- **PR #52 — tamam, CI başarılı ve main'e birleştirildi:** Şifreli dışa aktarım için yedek parolası tekrar girişi ve SAF kaydetmeden önce bağımsız AES-GCM decrypt + orijinal PIN doğrulaması. Fiziksel dosya sağlayıcı yazım kanıtı ayrıca gerekir.
 
 ### Ağırlıklı puan — üretim kullanımı dahil dürüst mühendislik tahmini
 
-| Alt sistem | Eski gözlem | Şimdi (PR #46/#48/#49 doğrulandı) | Yeni PR CI+merge başarılı olursa | Gerçek premium hedef |
+| Alt sistem | Önceki gözlem | PR #46/#48/#49 sonrası | Şimdi PR #51/#52 de doğrulandı | Gerçek premium hedef |
 |---|---:|---:|---:|---:|
 | İşlevler | 11/15 | 11/15 | 11/15 | 14/15 |
 | Güvenlik ve veri koruma | 15/20 | 16/20 | 17/20 | 19/20 |
@@ -246,9 +246,9 @@ Eski **debug imzalı** APK'nın uygulama verileri, farklı kalıcı **production
 | Mimari/UX/erişilebilirlik | 9/15 | 9/15 | 9/15 | 14/15 |
 | CI/otomatik test | 9/10 | 10/10 | 10/10 | 9/10 |
 | Fiziksel cihaz kabul | 1/10 | 1/10 | 1/10 | 9/10 |
-| **Toplam** | **56/100** | **63/100** | **66/100 (tahmin)** | **93/100** |
+| **Toplam** | **56/100** | **63/100** | **66/100 (kanıta bağlı tahmin)** | **93/100** |
 
-Bu puanlar dış denetim veya üretim sertifikasyonu değildir; CI testleri üretici gerçek cihazlarının yerini tutmaz. PR #50 başarısızken Google servissiz Android 10 uyumluluğu **kanıtlanmış değildir**.
+Bu puanlar dış denetim veya üretim sertifikasyonu değildir; CI testleri üretici gerçek cihazlarının yerini tutmaz. PR #50 son çift emülatör CI sonucu netleşene kadar Android 10 geriye uyumluluğu **kanıtlanmış değildir**.
 
 ### 70+ ve 80+ puanına sıçramak için gerçek üretim engelleri
 1. **Kimlik:** TLS üzerinde çalışan sunucu + server-scoped secrets ve revocation + PIN/Android cihaz anahtarının imzalı challenge ile doğrudan bağlanması; sahte kullanıcılar çağrı gönderememeli.
