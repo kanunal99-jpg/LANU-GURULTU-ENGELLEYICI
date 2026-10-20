@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 30
     env:
       LANU_VERSION_CODE: ${{ github.run_number }}
+      LANU_OTA_MANIFEST_URL: ${{ vars.LANU_OTA_MANIFEST_URL }}
     permissions:
       contents: write
     steps:
@@ -67,15 +68,51 @@ jobs:
           emulator-boot-timeout: 300
           disable-animations: true
           script: gradle connectedDebugAndroidTest --no-daemon
+      # Production OTA requires the same secret-backed signing key on every run.
+      # Never upload a debug-signed APK to the public OTA feed.
+      - name: Kalıcı imzalama anahtarı (varsa)
+        if: github.event_name != 'pull_request'
+        id: signing
+        env:
+          STORE_B64: ${{ secrets.LANU_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.LANU_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LANU_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LANU_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$STORE_B64" && -n "$STORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+            umask 077
+            echo "$STORE_B64" | base64 --decode > "$RUNNER_TEMP/lanu-release.jks"
+            echo "LANU_SIGNING_STORE_FILE=$RUNNER_TEMP/lanu-release.jks" >> "$GITHUB_ENV"
+            echo "LANU_SIGNING_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "LANU_SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "LANU_SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Production signing secrets missing: publishing a debug-signed prerelease, NOT OTA-compatible."
+          fi
       - name: APK imzası ve içerik doğrulaması
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.3.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.3.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.3.apk > dist/APK-BILGILERI.txt
-          unzip -l dist/Lanu-Lens-2.0.3.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
+            gradle assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk dist/Lanu-Lens-2.0.4.apk
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.4.apk
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.4.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.4.apk > dist/APK-BILGILERI.txt
+          unzip -l dist/Lanu-Lens-2.0.4.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
           cd dist
-          sha256sum Lanu-Lens-2.0.3.apk > SHA256SUMS.txt
+          sha256sum Lanu-Lens-2.0.4.apk > SHA256SUMS.txt
+          if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
+            HASH="$(sha256sum Lanu-Lens-2.0.4.apk | cut -d' ' -f1)"
+            SIZE="$(stat -c%s Lanu-Lens-2.0.4.apk)"
+            cat > latest.json <<EOF
+          {"schema":1,"versionCode":${GITHUB_RUN_NUMBER},"versionName":"2.0.4","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.4-build${GITHUB_RUN_NUMBER}/Lanu-Lens-2.0.4.apk","sha256":"${HASH}","sizeBytes":${SIZE}}
+          EOF
+            echo "latest.json prepared as an artifact. Publish APK + manifest to a separate PUBLIC binary-only distribution repository before activating OTA."
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -91,6 +128,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v2.0.3-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.3.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
+          gh release create "v2.0.4-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.4.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Lanu Lens 2.0.3" --notes-file docs/RELEASE-NOTES.md
+            --title "Lanu Lens 2.0.4" --notes-file docs/RELEASE-NOTES.md
