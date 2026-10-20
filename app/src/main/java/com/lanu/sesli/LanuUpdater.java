@@ -121,7 +121,7 @@ final class LanuUpdater {
                 if(code<=0||version.length()<1||version.length()>40
                     ||!version.matches("[0-9A-Za-z._+\\-]+")
                     ||!hash.matches("[0-9a-f]{64}")||size<1024||size>MAX_APK
-                    ||!isApkUrl(url))throw new IllegalArgumentException("Güncelleme dosyası bilgileri geçersiz");
+                    ||!isApkUrl(url) || !isExpectedReleaseUrl(url,version,code))throw new IllegalArgumentException("Güncelleme dosyası bilgileri geçersiz");
                 found=new Candidate(code,version,url,hash,size);
             }catch(Exception e){
                 Log.w(TAG,"Update metadata unavailable ("+e.getClass().getSimpleName()+")");
@@ -196,7 +196,7 @@ final class LanuUpdater {
                 }
                 if(total!=next.size||!MessageDigest.isEqual(hex(digest.digest()).getBytes(StandardCharsets.US_ASCII),
                         next.sha.getBytes(StandardCharsets.US_ASCII)))throw new SecurityException("APK checksum mismatch");
-                validatePackage(tmp,next.code);
+                validatePackage(tmp,next.code,next.version);
                 if(dest.exists()&&!dest.delete())throw new IllegalStateException("Cannot replace old APK");
                 if(!tmp.renameTo(dest))throw new IllegalStateException("Cannot finalize download");
             }catch(Exception e){
@@ -234,7 +234,7 @@ final class LanuUpdater {
             try{
                 if(!matchesDigest(file,candidate.size,candidate.sha))
                     throw new SecurityException("APK changed after verification");
-                validatePackage(file,candidate.code);
+                validatePackage(file,candidate.code,candidate.version);
                 valid=true;
             }catch(Exception e){
                 Log.w(TAG,"Pre-install APK integrity verification failed ("+e.getClass().getSimpleName()+")");
@@ -291,10 +291,18 @@ final class LanuUpdater {
     void close(){destroyed=true;io.shutdownNow();}
 
     private static boolean isFeedUrl(String url){
-        try{URL u=new URL(url);return "https".equals(u.getProtocol())&&u.getUserInfo()==null
-          &&u.getPort()==-1&&("raw.githubusercontent.com".equals(u.getHost())
-          ||"github.com".equals(u.getHost())||"updates.lanu.app".equals(u.getHost()));}
-        catch(Exception ignored){return false;}
+        // Even if a build configuration changes, never accept an unreviewed host or path.
+        return "https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(url);
+    }
+    private static boolean isExpectedReleaseUrl(String url,String version,int code){
+        if(code<=0 || version==null || !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+"))return false;
+        try {
+            URL u=new URL(url);
+            String prefix=OTA_REPO_PATH+"v"+version+"-build"+code+"/";
+            return isApkUrl(url) && u.getPath().startsWith(prefix)
+                && u.getPath().indexOf('/',prefix.length())==-1
+                && u.getQuery()==null && u.getRef()==null;
+        }catch(Exception ignored){return false;}
     }
     private static boolean isApkUrl(String url){
         try {
@@ -330,7 +338,7 @@ final class LanuUpdater {
         String next=url;
         for(int i=0;i<5;i++){
             URL u=new URL(next);
-            if(!"https".equals(u.getProtocol())||u.getUserInfo()!=null)throw new SecurityException("Unsafe redirect");
+            if(!"https".equals(u.getProtocol())||u.getUserInfo()!=null || (u.getPort()!=-1 && u.getPort()!=443))throw new SecurityException("Unsafe redirect");
             String host=u.getHost();
             if(!(("github.com".equals(host)&&u.getPath().startsWith(OTA_REPO_PATH))
                 ||"release-assets.githubusercontent.com".equals(host)
@@ -372,7 +380,7 @@ final class LanuUpdater {
         return new String(out);
     }
     @SuppressWarnings("deprecation")
-    private void validatePackage(File apk,int wantedCode) throws Exception {
+    private void validatePackage(File apk,int wantedCode,String wantedVersion) throws Exception {
         PackageManager pm=activity.getPackageManager();
         int flags=Build.VERSION.SDK_INT>=28
                 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
@@ -391,7 +399,7 @@ final class LanuUpdater {
         if(proposed==null||existing==null||proposed.length==0
                 ||proposed.length!=existing.length)throw new SecurityException("Package signing info unavailable");
         int code=Build.VERSION.SDK_INT>=28?(int)archive.getLongVersionCode():archive.versionCode;
-        if(code!=wantedCode||code<=installedCode())throw new SecurityException("Unexpected version");
+        if(code!=wantedCode||code<=installedCode() || !wantedVersion.equals(archive.versionName))throw new SecurityException("Unexpected version");
         // Exact current signer equality is deliberately stricter than a
         // historical certificate chain: never accept an unexpected key swap.
         for(Signature sig:proposed){
@@ -399,6 +407,15 @@ final class LanuUpdater {
             for(Signature currentSigner:existing)
                 if(Arrays.equals(sig.toByteArray(),currentSigner.toByteArray())){match=true;break;}
             if(!match)throw new SecurityException("APK signing certificate changed");
+        }
+        // Production releases can additionally pin the expected certificate to
+        // an independently configured, non-secret fingerprint.
+        String pin=BuildConfig.OTA_RELEASE_CERT_SHA256;
+        if(!pin.isEmpty()){
+            for(Signature sig:proposed)if(!pin.equals(hex(MessageDigest.getInstance("SHA-256").digest(sig.toByteArray()))))
+                throw new SecurityException("Pinned signing certificate mismatch");
+            for(Signature sig:existing)if(!pin.equals(hex(MessageDigest.getInstance("SHA-256").digest(sig.toByteArray()))))
+                throw new SecurityException("Installed certificate differs from production pin");
         }
     }
 }
