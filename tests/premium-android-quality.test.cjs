@@ -54,3 +54,15 @@ test('critical legacy camera and calls are kept intact during staged architectur
   assert.match(manifest,/android:name="\.MainActivity"/);
   assert.match(gradle,/versionName = "2\.0\.9"/);
 });
+
+test('WebRTC test WebSocket dependency uses a patched and integrity-pinned tarball',()=>{
+  const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+  const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+  const ws=lock.packages['node_modules/ws'];
+  assert.equal(pkg.devDependencies.ws,'8.21.0');
+  assert.equal(lock.packages[''].devDependencies.ws,'8.21.0');
+  assert.equal(ws.version,'8.21.0');
+  assert.equal(ws.resolved,'https://registry.npmjs.org/ws/-/ws-8.21.0.tgz');
+  assert.match(ws.integrity,/^sha512-[A-Za-z0-9+/]+={0,2}$/);
+  assert.match(workflow,/npm audit --audit-level=high --no-fund/);
+});
