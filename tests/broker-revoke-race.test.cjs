@@ -30,15 +30,28 @@ test('revocation while ECDSA verifies must never mint a fresh bearer token',asyn
  assert.equal(b.sessions.size,0);
 });
 test('full call inbox refuses new invitations before consuming replay nonce',async()=>{
- const b=new Broker(),a=await Auth.generate(webcrypto),target=await Auth.generate(webcrypto);
- await enroll(b,a);await enroll(b,target);
- const at=await token(b,a),bt=await token(b,target);
- const req=b.requestPairing(at,target.deviceId);
- b.approvePairing(bt,req.requestId,a.deviceId);
- for(let n=0;n<10;n++)assert.equal((await b.submitInvite(at,await Auth.signInvite(webcrypto,a,target.deviceId))).accepted,true);
- const next=await Auth.signInvite(webcrypto,a,target.deviceId);
+ const b=new Broker(),target=await Auth.generate(webcrypto);
+ await enroll(b,target);
+ const bt=await token(b,target);
+ // Spread ten queued calls over three separately trusted callers so each
+ // stays below its own 5-per-minute rate limit.
+ const senders=[];
+ for(const count of [4,4,2]){
+   const identity=await Auth.generate(webcrypto);
+   await enroll(b,identity);
+   const session=await token(b,identity);
+   const approval=b.requestPairing(session,target.deviceId);
+   b.approvePairing(bt,approval.requestId,identity.deviceId);
+   senders.push({identity,session,count});
+ }
+ for(const {identity,session,count} of senders){
+   for(let n=0;n<count;n++)
+     assert.equal((await b.submitInvite(session,await Auth.signInvite(webcrypto,identity,target.deviceId))).accepted,true);
+ }
+ const third=senders[2];
+ const next=await Auth.signInvite(webcrypto,third.identity,target.deviceId);
  const consumed=b.replay.records.size;
- await assert.rejects(()=>b.submitInvite(at,next),/Rate limited|Recipient busy/);
+ await assert.rejects(()=>b.submitInvite(third.session,next),/Recipient busy/);
  assert.equal(b.replay.records.size,consumed);
  assert.equal(b.takeInvites(bt).length,10);
 });
