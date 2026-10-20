@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
             main.postDelayed(this, 4000);
         }
     };
-    private boolean active, speaker, destroyed, visible;
+    private boolean active, speaker, destroyed, visible, privateUnlocked;
     private int previousMode;
     private boolean previousSpeaker;
     private AudioFocusRequest focus;
@@ -193,17 +193,24 @@ public class MainActivity extends Activity {
         if (code == NOTIFY && incomingAlert && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) updateIncomingAlert(true);
     }
 
-    /** Only the bundled local page can call this bridge. URLs are never taken from JavaScript. */
+    /** The native updater never starts a system installer from the locked camera
+     * surface, background or a destroyed Activity. */
+    boolean canShowUpdater() { return !destroyed && visible && privateUnlocked && web != null; }
+    /** Only bundled local assets may use this JS bridge; all system UI decisions
+     * additionally validate the native unlock/foreground state. */
     private final class UpdateBridge {
-        @JavascriptInterface public void info() { main.post(() -> { if (!destroyed && visible) updater.info(); }); }
-        @JavascriptInterface public void check() { main.post(() -> { if (!destroyed && visible) updater.check(); }); }
-        @JavascriptInterface public void download() { main.post(() -> { if (!destroyed && visible) updater.download(); }); }
-        @JavascriptInterface public void downloadAndInstall() { main.post(() -> { if (!destroyed && visible) updater.downloadAndInstall(); }); }
-        @JavascriptInterface public void install() { main.post(() -> { if (!destroyed && visible) updater.install(); }); }
-        @JavascriptInterface public void releases() { main.post(() -> { if (!destroyed && visible) updater.releasePage(); }); }
+        @JavascriptInterface public void setPrivateUnlocked(boolean unlocked) {
+            main.post(() -> { if (!destroyed) privateUnlocked = unlocked && visible; });
+        }
+        @JavascriptInterface public void info() { main.post(() -> { if (canShowUpdater()) updater.info(); }); }
+        @JavascriptInterface public void check() { main.post(() -> { if (canShowUpdater()) updater.check(); }); }
+        @JavascriptInterface public void download() { main.post(() -> { if (canShowUpdater()) updater.download(); }); }
+        @JavascriptInterface public void downloadAndInstall() { main.post(() -> { if (canShowUpdater()) updater.downloadAndInstall(); }); }
+        @JavascriptInterface public void install() { main.post(() -> { if (canShowUpdater()) updater.install(); }); }
+        @JavascriptInterface public void releases() { main.post(() -> { if (canShowUpdater()) updater.releasePage(); }); }
     }
     void updateStatus(org.json.JSONObject data) {
-        if (web == null || destroyed || !visible) return;
+        if (!canShowUpdater()) return;
         web.evaluateJavascript("window.lanuUpdateEvent && window.lanuUpdateEvent(" + data.toString() + ")", null);
     }
 
@@ -457,6 +464,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onStop() {
         visible = false;
+        privateUnlocked = false;
         updateIncomingAlert(false);
         ring(false); ringBack(false);
         if(web!=null)web.evaluateJavascript("window.lanuBackground && window.lanuBackground()",null);
@@ -471,6 +479,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.lanuBack ? window.lanuBack() : false",handled->{if(!"true".equals(handled))finish();});
     }
     @Override protected void onDestroy() {
+        privateUnlocked = false;
         updateIncomingAlert(false);
         ring(false); ringBack(false); setActive(false);
         files.shutdown(); photoBytes=null;
