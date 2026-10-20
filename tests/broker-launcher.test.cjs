@@ -5,7 +5,7 @@ const http=require('node:http');
 const {startBroker}=require('../server/start-broker.cjs');
 async function health(socketPath){
   return new Promise((resolve,reject)=>{
-    const request=http.request({socketPath,path:'/healthz',method:'GET',timeout:2000},response=>{
+    const request=http.request({socketPath,path:'/healthz',method:'GET',timeout:2000,agent:false},response=>{
       const parts=[];response.on('data',x=>parts.push(x));
       response.on('end',()=>resolve({status:response.statusCode,data:JSON.parse(Buffer.concat(parts).toString())}));
     });
