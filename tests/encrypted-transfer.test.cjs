@@ -75,3 +75,35 @@ test('storage quota error cannot leave restored route behind when vault write fa
  assert.equal(dest.getItem('lens-vault-v1'),null);
  assert.equal(dest.getItem('lanuId'),'111111');
 });
+
+test('background/PIN-gate cancellation after slow KDF prevents writing any restored data',async()=>{
+ const source=await prepared(),bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const target=storage();target.setItem('lanuId','123456');
+ let checks=0;
+ await assert.rejects(()=>transfer.importBackup({
+   storage:target,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle,
+   canCommit:()=>{checks++;return false;}
+ }),/Cancelled/);
+ assert.equal(checks,1);
+ assert.equal(target.getItem('lens-vault-v1'),null);
+ assert.equal(target.getItem('lanuId'),'123456');
+});
+test('Android SAF backup bridge is PIN-gated, limited and uses system document picker',()=>{
+ const fs=require('node:fs');
+ const main=fs.readFileSync('app/src/main/java/com/lanu/sesli/MainActivity.java','utf8');
+ const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
+ const lens=fs.readFileSync('app/src/main/assets/lens.js','utf8');
+ assert.ok(main.includes('SAVE_BACKUP = 15, LOAD_BACKUP = 16'));
+ assert.ok(main.includes('MAX_BACKUP_BYTES = 400 * 1024'));
+ assert.ok(main.includes('new BackupBridge(), "LanuBackup"'));
+ assert.ok(main.includes('if(!canShowUpdater() || backupBytes != null'));
+ assert.ok(main.includes('Intent.ACTION_CREATE_DOCUMENT'));
+ assert.ok(main.includes('Intent.ACTION_OPEN_DOCUMENT'));
+ assert.ok(main.includes('if(resultBytes.size()+n>MAX_BACKUP_BYTES)'));
+ assert.ok(main.includes('org.json.JSONObject.quote(encryptedJson)'));
+ assert.ok(html.includes('id="exportBackup"'));
+ assert.ok(html.includes('id="restoreSubmit"'));
+ assert.ok(lens.includes('canCommit:()=>token===gateEpoch && !opened && !document.hidden'));
+ assert.ok(lens.includes('window.location.reload()'));
+ assert.ok(lens.includes('window.lanuBackupLoaded'));
+});

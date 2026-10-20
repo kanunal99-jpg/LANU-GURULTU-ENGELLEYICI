@@ -18,7 +18,19 @@
     <p class="camera-footer">LANU LENS · Kendi bakış açın.</p>
   </main>
   <section id="photoView" class="overlay" hidden aria-label="Fotoğraf önizleme"><img id="photoPreview" alt="Çekilen fotoğraf"><p id="photoStatus" role="status"></p><button id="savePhoto">Fotoğrafı kaydet</button><button id="closePhoto" class="secondary">Kameraya dön</button></section>
-  <section id="gate" class="overlay gate" hidden role="dialog" aria-modal="true" aria-labelledby="gateTitle"><img src="lens.svg" width="64" height="64" alt=""><h1 id="gateTitle">PIN</h1><form id="pinForm"><label for="pin" id="pinLabel">6–12 haneli PIN</label><input id="pin" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" required><label for="pinConfirm" id="confirmLabel" hidden>PIN tekrar</label><input id="pinConfirm" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" hidden><button id="pinSubmit" type="submit">Devam</button></form><p id="gateStatus" role="status"></p><button id="cancelGate" class="secondary">Vazgeç</button></section>
+  <section id="gate" class="overlay gate" hidden role="dialog" aria-modal="true" aria-labelledby="gateTitle"><img src="lens.svg" width="64" height="64" alt=""><h1 id="gateTitle">PIN</h1><form id="pinForm"><label for="pin" id="pinLabel">6–12 haneli PIN</label><input id="pin" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" required><label for="pinConfirm" id="confirmLabel" hidden>PIN tekrar</label><input id="pinConfirm" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="off" hidden><button id="pinSubmit" type="submit">Devam</button></form><p id="gateStatus" role="status"></p>
+    <section id="restorePane" hidden aria-label="Şifreli yedekten geri yükle">
+      <h2>Eski verilerini geri yükle</h2>
+      <p class="hint">Yalnızca uygulamada henüz PIN kasası yokken kullanılır. Önce eski cihazından şifreli yedek oluşturmuş olmalısın.</p>
+      <button id="pickBackup" type="button" class="secondary">Şifreli yedek dosyası seç</button>
+      <label for="restorePin">Yedekteki eski PIN</label>
+      <input id="restorePin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="6–12 haneli eski PIN">
+      <label for="restorePassphrase">Yedek dosyası parolası</label>
+      <input id="restorePassphrase" type="password" autocomplete="off" maxlength="128" placeholder="En az 12 karakter">
+      <button id="restoreSubmit" type="button" disabled>Geri yüklemeyi doğrula</button>
+      <p id="restoreStatus" role="status" class="hint">Henüz yedek dosyası seçilmedi.</p>
+    </section>
+    <button id="cancelGate" class="secondary">Vazgeç</button></section>
   <section id="privateView" hidden aria-label="Görüşmeler">
   <div class="private-content">
     <div class="private-title"><div><span class="eyebrow">LANU LENS</span><h1>Görüşmeler</h1></div><button id="lockBtn" class="compact secondary">Kilitle</button></div>
@@ -68,6 +80,14 @@
       <button id="downloadUpdate" type="button" class="green" hidden>Yeni sürümü indir ve güncelle</button>
       <button id="installUpdate" type="button" class="green" hidden>Güncellemeyi kur</button>
       <button id="updateReleases" class="secondary" type="button">GitHub sürümlerini aç</button>
+      <h2>Şifreli veri yedeği</h2>
+      <p class="hint">Farklı imzalı APK'ya geçişten önce rehberini, mevcut PIN kasanı ve 6 haneli kodunu şifreli olarak dışa aktar. Yedek parolasını ve eski PIN'ini unutma. Cihaz anahtarları dışa aktarılmaz.</p>
+      <label for="exportPin">Mevcut PIN</label>
+      <input id="exportPin" type="password" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="6–12 haneli PIN">
+      <label for="exportPassphrase">Ayrı yedek dosyası parolası</label>
+      <input id="exportPassphrase" type="password" autocomplete="off" maxlength="128" placeholder="En az 12 karakter">
+      <button id="exportBackup" type="button" class="secondary">Şifreli yedek dosyası oluştur</button>
+      <p id="exportStatus" class="hint" role="status" aria-live="polite">Yalnızca kullanıcı seçtiği konuma kaydedilir. Silmeden önce dosyanın kaydedildiğini doğrula.</p>
       <p class="hint">APK önce SHA-256 ve aynı uygulama imzasıyla doğrulanır. Android, kurulumu onaylamanı isteyecektir. Bu sayfa PIN korumalıdır.</p>
       <p class="hint">Özel GitHub sürümleri otomatik indirilemez. OTA için ayrı bir herkese açık APK dağıtım adresi ve sürümler boyunca değişmeyen imzalama anahtarı gereklidir. Kaynak kodu özel kalabilir.</p>
     </section>

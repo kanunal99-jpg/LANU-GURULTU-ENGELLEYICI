@@ -5,6 +5,7 @@
   let entries = [];
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
   let incomingPair = null, writes = Promise.resolve(), lastCallState = 'idle';
+  let pendingEncryptedBackup = null;
   const message = text => { $('cameraStatus').textContent = text; };
   let allowIncoming=false,suspended=document.hidden;
   try{allowIncoming=localStorage.getItem('lens-listen')==='true'&&localStorage.getItem('lens-vault-v1')!==null;}catch(_){}
@@ -109,6 +110,9 @@
       if(!window.crypto || !window.crypto.subtle) throw Error('CryptoUnavailable');
       if(!vault) vault=new LensVault(storage(),window.crypto);
       mode = change ? 'change' : vault.exists() ? 'unlock' : 'create';
+      $('restorePane').hidden = mode !== 'create';
+      $('restoreSubmit').disabled = !pendingEncryptedBackup;
+      $('restoreStatus').textContent = pendingEncryptedBackup ? 'Şifreli dosya alındı; eski PIN ve yedek parolasını gir.' : 'Henüz yedek dosyası seçilmedi.';
       $('gateTitle').textContent=mode==='unlock'?'PIN':'PIN oluştur';
       $('confirmLabel').hidden=$('pinConfirm').hidden=mode==='unlock';
       $('pinConfirm').required=mode!=='unlock'; $('pinForm').reset();
@@ -164,7 +168,9 @@
     $('updatesTab').textContent='Güncelleme Kontrol';
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
-    $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
+    $('pinForm').reset();
+    for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase'])$(id).value='';
+    $('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
   }
@@ -212,6 +218,70 @@
     },
     clearPair(){incomingPair=null;$('pairRequest').hidden=true;}
   };
+  // Android's SAF returns ONLY encrypted bytes. Never store the backup,
+  // passphrase or old PIN in localStorage, diagnostics or logs.
+  window.lanuBackupLoaded = serialized => {
+    if(typeof serialized!=='string' || serialized.length>400*1024 || vault&&vault.exists()) {
+      pendingEncryptedBackup=null; return;
+    }
+    pendingEncryptedBackup=serialized;
+    $('restoreSubmit').disabled=false;
+    $('restoreStatus').textContent='Dosya seçildi. Önceki PIN ve yedek parolanla doğrula.';
+  };
+  window.lanuBackupResult = (action,ok) => {
+    const text=action==='save' ? (ok?'Şifreli yedek dosyası kaydedildi. Güvenli yerde sakla.':'Yedek dosyası kaydedilemedi veya işlem iptal edildi.')
+      : (ok?'Şifreli yedek seçildi.':'Yedek dosyası açılamadı veya seçim iptal edildi.');
+    if(opened)$('exportStatus').textContent=text;
+    else message(text);
+  };
+  $('pickBackup').addEventListener('click',()=>{
+    if(opened || $('gate').hidden || mode!=='create' || vault&&vault.exists() ||
+       !window.LanuBackup || typeof window.LanuBackup.importEncrypted!=='function')return;
+    $('restoreStatus').textContent='Android dosya seçicisi açılıyor…';
+    window.LanuBackup.importEncrypted();
+  });
+  $('restoreSubmit').addEventListener('click',async()=>{
+    if(opened || $('gate').hidden || mode!=='create' || vault&&vault.exists() ||
+       !pendingEncryptedBackup || !window.LanuEncryptedTransfer)return;
+    const pin=$('restorePin').value,passphrase=$('restorePassphrase').value;
+    $('restorePin').value=$('restorePassphrase').value='';
+    const token=++gateEpoch,backup=pendingEncryptedBackup;
+    $('restoreSubmit').disabled=true;$('restoreStatus').textContent='PIN ve şifreli dosya doğrulanıyor…';
+    try{
+      await window.LanuEncryptedTransfer.importBackup({
+        storage:storage(),crypto:window.crypto,pin,passphrase,serialized:backup,
+        canCommit:()=>token===gateEpoch && !opened && !document.hidden &&
+          !$('gate').hidden && mode==='create'
+      });
+      if(token!==gateEpoch || document.hidden)return;
+      pendingEncryptedBackup=null;
+      if(vault)vault.lock();
+      // Reload recovers the transferred six-digit routing code before PeerJS
+      // connects, and enforces a fresh PIN unlock on the newly restored vault.
+      window.location.reload();
+    }catch(_){
+      if(token===gateEpoch)$('restoreStatus').textContent='Yedek doğrulanamadı. Eski PIN ve yedek parolasını kontrol et; mevcut dosya değiştirilmedi.';
+    }finally{if(token===gateEpoch)$('restoreSubmit').disabled=!pendingEncryptedBackup;}
+  });
+  $('exportBackup').addEventListener('click',async()=>{
+    if(!opened || !vault || !vault.data || !window.LanuEncryptedTransfer ||
+       !window.LanuBackup || typeof window.LanuBackup.exportEncrypted!=='function')return;
+    const pin=$('exportPin').value,passphrase=$('exportPassphrase').value;
+    $('exportPin').value=$('exportPassphrase').value='';
+    const token=gateEpoch;
+    $('exportBackup').disabled=true;$('exportStatus').textContent='Şifreli dosya oluşturuluyor…';
+    try{
+      await writes;
+      if(!opened || token!==gateEpoch || document.hidden)throw Error('Cancelled');
+      const encrypted=await window.LanuEncryptedTransfer.exportBackup({storage:storage(),
+        crypto:window.crypto,pin,passphrase});
+      if(!opened || token!==gateEpoch || document.hidden)throw Error('Cancelled');
+      window.LanuBackup.exportEncrypted(encrypted);
+      $('exportStatus').textContent='Android dosya seçicisinden yedeği kaydedeceğin konumu seç.';
+    }catch(_){
+      if(opened && token===gateEpoch)$('exportStatus').textContent='Şifreli yedek oluşturulamadı. PIN, parola ve depolama erişimini kontrol et.';
+    }finally{if(opened && token===gateEpoch)$('exportBackup').disabled=false;}
+  });
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
   window.lanuForeground=()=>{suspended=false;};
   window.lanuBackground=()=>{entries.forEach(entry=>entry.cancel());suspended=true;lock(false);};
