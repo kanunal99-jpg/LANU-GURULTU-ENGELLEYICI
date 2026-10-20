@@ -61,11 +61,14 @@
      expire();
      const attempt=authEpoch;
      const identity=await store.load();
+     if(attempt!==authEpoch)throw Error('Sign-in cancelled');
      if(!identity||(!identity.privateKey || identity.privateKey.extractable!==false) ||
         !id.test(identity.deviceId))throw Error('Device enrollment missing');
      const challenge=await request('/v1/session/challenge',{deviceId:identity.deviceId},false);
+     if(attempt!==authEpoch)throw Error('Sign-in cancelled');
      assertChallenge(challenge,'LOGIN',identity.deviceId);
      const signature=await AUTH.signChallenge(cryptoApi,identity,'LOGIN',challenge.nonce);
+     if(attempt!==authEpoch)throw Error('Sign-in cancelled');
      const result=await request('/v1/session/complete',{deviceId:identity.deviceId,nonce:challenge.nonce,signature},false);
      if(typeof result.token!=='string'||!id.test(result.token)||result.ttlSeconds!==900)
        throw Error('Invalid session');
