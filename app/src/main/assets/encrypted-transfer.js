@@ -2,7 +2,7 @@
   'use strict';
   // Staged, opt-in export format for a future Android Storage Access Framework
   // picker. Not yet wired to UI; never automatically restore/overwrite data.
-  const ROOT='lens-vault-v1',ROUTE='lanuId',MAX_FILE=400*1024,MAX_RAW=256*1024;
+  const ROOT='lens-vault-v1',ROUTE='lanuId',PROVISIONAL='lens-routing-provisional-v1',MAX_FILE=400*1024,MAX_RAW=256*1024;
   const Vault=(typeof module!=='undefined'&&module.exports)
     ? require('./vault.js') : root.LensVault;
   const encode=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
@@ -74,12 +74,18 @@
     if(!canCommit())throw Error('Cancelled');
     const previousRoute=storage.getItem(ROUTE);
     verifyRoute(previousRoute);
-    // A device may already own a routing ID even without a PIN vault.
-    // Import must never silently hijack that address book/call identity.
-    if(previousRoute!==null && data.routingId!==null && previousRoute!==data.routingId)
+    const provisionalRoute=storage.getItem(PROVISIONAL);
+    // Only a code created automatically on the NEW installation is safely
+    // replaceable. Old installations have no marker and stay fail-closed.
+    const canReplaceProvisional=previousRoute!==null &&
+       provisionalRoute===previousRoute && data.routingId!==null;
+    if(previousRoute!==null && data.routingId!==null &&
+       previousRoute!==data.routingId && !canReplaceProvisional)
       throw Error('Routing identity conflict; destination unchanged');
     try{
-      if(data.routingId!==null && previousRoute===null)storage.setItem(ROUTE,data.routingId);
+      if(data.routingId!==null &&
+         (previousRoute===null || canReplaceProvisional))
+        storage.setItem(ROUTE,data.routingId);
       storage.setItem(ROOT,data.vaultCipher); // Write the validated vault last.
     }catch(error){
       try{
@@ -87,6 +93,12 @@
         else storage.setItem(ROUTE,previousRoute);
       }catch(_){}
       throw error;
+    }
+    // Marker cleanup is deliberately best effort and occurs only AFTER the
+    // validated vault has committed. Failure cannot roll back a completed
+    // vault write and accidentally split route/vault identities.
+    if(canReplaceProvisional || provisionalRoute===previousRoute){
+      try{storage.removeItem(PROVISIONAL);}catch(_){}
     }
     return {contactsRestored:true,routingIdRestored:data.routingId!==null};
   }
