@@ -286,20 +286,30 @@ final class LanuUpdater {
     @SuppressWarnings("deprecation")
     private void validatePackage(File apk,int wantedCode) throws Exception {
         PackageManager pm=activity.getPackageManager();
-        int flags=PackageManager.GET_SIGNATURES;
+        int flags=Build.VERSION.SDK_INT>=28
+                ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
         PackageInfo archive=pm.getPackageArchiveInfo(apk.getAbsolutePath(),flags);
         PackageInfo current=pm.getPackageInfo(activity.getPackageName(),flags);
-        if(archive==null||!activity.getPackageName().equals(archive.packageName)
-                ||archive.signatures==null||current.signatures==null
-                ||archive.signatures.length==0||current.signatures.length==0
-                ||archive.signatures.length!=current.signatures.length)
+        if(archive==null||!activity.getPackageName().equals(archive.packageName))
             throw new SecurityException("Package identity invalid");
+        Signature[] proposed;
+        Signature[] existing;
+        if(Build.VERSION.SDK_INT>=28){
+            proposed=archive.signingInfo==null?null:archive.signingInfo.getApkContentsSigners();
+            existing=current.signingInfo==null?null:current.signingInfo.getApkContentsSigners();
+        }else{
+            proposed=archive.signatures;existing=current.signatures;
+        }
+        if(proposed==null||existing==null||proposed.length==0
+                ||proposed.length!=existing.length)throw new SecurityException("Package signing info unavailable");
         int code=Build.VERSION.SDK_INT>=28?(int)archive.getLongVersionCode():archive.versionCode;
         if(code!=wantedCode||code<=installedCode())throw new SecurityException("Unexpected version");
-        for(int i=0;i<archive.signatures.length;i++){
-            Signature sig=archive.signatures[i];boolean match=false;
-            for(Signature existing:current.signatures)
-                if(Arrays.equals(sig.toByteArray(),existing.toByteArray())){match=true;break;}
+        // Exact current signer equality is deliberately stricter than a
+        // historical certificate chain: never accept an unexpected key swap.
+        for(Signature sig:proposed){
+            boolean match=false;
+            for(Signature currentSigner:existing)
+                if(Arrays.equals(sig.toByteArray(),currentSigner.toByteArray())){match=true;break;}
             if(!match)throw new SecurityException("APK signing certificate changed");
         }
     }
