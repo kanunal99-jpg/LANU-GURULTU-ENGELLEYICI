@@ -198,6 +198,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void info() { main.post(() -> { if (!destroyed && visible) updater.info(); }); }
         @JavascriptInterface public void check() { main.post(() -> { if (!destroyed && visible) updater.check(); }); }
         @JavascriptInterface public void download() { main.post(() -> { if (!destroyed && visible) updater.download(); }); }
+        @JavascriptInterface public void downloadAndInstall() { main.post(() -> { if (!destroyed && visible) updater.downloadAndInstall(); }); }
         @JavascriptInterface public void install() { main.post(() -> { if (!destroyed && visible) updater.install(); }); }
         @JavascriptInterface public void releases() { main.post(() -> { if (!destroyed && visible) updater.releasePage(); }); }
     }

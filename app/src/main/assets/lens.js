@@ -24,6 +24,8 @@
   }
   window.lanuUpdateEvent = event => {
     if (!opened || !event || typeof event.state !== 'string') return;
+    // This badge is never visible on the public-facing camera screen.
+    $('updatesTab').textContent=(event.state==='available'||event.state==='ready')?'Güncelleme var':'Güncelleme Kontrol';
     $('installedVersion').textContent = (event.version || 'bilinmiyor') + ' (kod ' + (event.versionCode || '?') + ')';
     $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
     $('downloadUpdate').hidden = event.state !== 'available';
@@ -113,6 +115,8 @@
       opened=true;$('gate').hidden=true;$('cameraView').hidden=true;$('privateView').hidden=false;
       $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();touch();
       if(calls())calls().activate();
+      // Best-effort version check after PIN entry, never before unlocking.
+      if(window.LanuUpdate && typeof window.LanuUpdate.check==='function')window.LanuUpdate.check();
     }catch(e){
       if(token!==gateEpoch)return;
       if(mode==='unlock' && e.message!=='Wait') {
@@ -131,6 +135,7 @@
     $('privateView').hidden=$('gate').hidden=true;$('codeChangeConfirm').hidden=true;$('cameraView').hidden=false;
     $('callsPane').hidden=false;$('updatesPane').hidden=true;
     $('callsTab').classList.add('active');$('updatesTab').classList.remove('active');
+    $('updatesTab').textContent='Güncelleme Kontrol';
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
@@ -204,7 +209,7 @@
   $('callsTab').addEventListener('click',()=>showPrivateTab(false));
   $('updatesTab').addEventListener('click',()=>showPrivateTab(true));
   $('checkUpdates').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.check();});
-  $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.download();});
+  $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.downloadAndInstall();});
   $('installUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.install();});
   $('updateReleases').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.releases();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));

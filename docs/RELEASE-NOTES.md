@@ -1,4 +1,4 @@
-# Lanu Lens 2.0.5 — PIN korumalı Güncelleme Kontrol
+# Lanu Lens 2.0.6 — PIN korumalı Güncelleme Kontrol
 
 - Özel alanda **Görüşmeler / Güncelleme Kontrol** sekmeleri eklendi. Kamera ana ekranında güncelleme veya görüşme bilgisi gösterilmez.
 - Kurulu uygulama sürümü ve versionCode, yeni sürümü HTTPS ile denetleme, APK indirme/doğrulama ve Android kurulum ekranını açma özellikleri eklendi.
@@ -19,3 +19,15 @@ Arka planda/kapalıyken çağrı alma hâlâ ayrı bir FCM + yetkilendirilmiş s
 - Public token, keystore, imza parolaları eksikse kaynak depo sadece private debug test sürümü üretir; OTA dağıtılıyor izlenimi vermez.
 - Üretim sırları ve tokenlar Android APK, kaynak kod veya herkese açık sitede bulunmaz.
 - Uçtan uca ilk OTA yükleme testi için user-owned public `LANU-LENS-OTA` deposu, sabit imza ve yetkilendirilmiş dağıtım token'ı gereklidir.
+
+
+### 2. Paket — gerçek cihaz için uygulama içi güncelleme akışı
+
+- PIN doğrulandıktan sonra sürüm denetimi sessizce tetiklenir; yeni sürüm varsa yalnızca özel alanda **Güncelleme var** sekme etiketi görünür.
+- Kullanıcı **Yeni sürümü indir ve güncelle** dediğinde Android HTTPS indirme, maksimum boyut/uzunluk ve SHA-256 denetimi, paket adı ve mevcut APK imzasıyla sertifika eşleşmesi sonrasında doğrudan Android kurulum onayı ekranını açar.
+- Android 9+ `GET_SIGNING_CERTIFICATES` ile güncel APK içerik imzalayıcıları karşılaştırılır, Android 8'de legacy signature API kullanılır. Beklenmeyen imza ve düşük/eşit versionCode reddedilir.
+- Cihaz bilinmeyen kaynak izni istemek için ayarlara geçtiğinde PIN alanı kilitlenir; daha önce doğrulanmış APK korunur, uygulama geri açılıp PIN girilince tekrar indirmeden kurmaya devam edilebilir.
+- Ağ kontrolü başarısızsa ve önceden indirilen doğrulanmış APK varsa kurulum işlemi korunur. İndirme yüzdesi ve ağ/izni geri çevirme durumları kullanıcıya bildirilir.
+- Gerçek **kullanıcı onayı** olmadan Android'de sessiz kurulum yapılmaz.
+
+**Dağıtımın son etkinleştirilmesi:** Github `LANU-LENS-OTA` public sadece-binary deposu, kalıcı/backup release keystore, repo-scoped yayın token'ı, OTA manifest adresi ve sabit sertifika SHA-256 hâlâ kullanıcı hesabında yapılandırılmalıdır. Bunlar sağlanmadan bu sürüm test APK'sı olarak yayınlanır; başka debug anahtarı üzerinde veri koruyan update garantisi verilmez.
