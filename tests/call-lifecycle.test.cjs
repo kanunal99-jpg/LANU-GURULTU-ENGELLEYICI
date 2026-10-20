@@ -43,7 +43,7 @@ function harness(options = {}) {
   const storage = options.storage || new Map([['lanuId', '123456']]);
   const context = {document, navigator: {onLine: options.online !== false, mediaDevices: media},
     localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)},
-    Peer, Uint32Array, console: {warn() {}}, Math, Promise,
+    Peer, Uint32Array, crypto:options.crypto, console: {warn() {}}, Math, Promise,
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timers.delete(id); },
     addEventListener(event, fn) { events[event] = fn; },
@@ -251,7 +251,7 @@ test('a failed storage write never changes the active identity', () => {
 });
 test('invalid stored ID is replaced and persisted even when the initial connection is offline', () => {
   const storage = new Map([['lanuId', 'bad']]);
-  const h = harness({storage,online:false});
+  const h = harness({storage,online:false,crypto:{getRandomValues(a){a[0]=500000;return a;}}});
   const id = storage.get('lanuId');
   assert.match(id, /^[1-9]\d{5}$/);
   assert.equal(h.peers.length, 0);
@@ -259,7 +259,7 @@ test('invalid stored ID is replaced and persisted even when the initial connecti
   assert.equal(h.peers[0].id, 'lanu-sesli-' + id);
 });
 test('invalid persisted ID is replaced', () => {
-  const storage = new Map([['lanuId','bad']]),h = harness({storage}); h.open();
+  const storage = new Map([['lanuId','bad']]),h = harness({storage,crypto:{getRandomValues(a){a[0]=500000;return a;}}}); h.open();
   assert.match(h.get('myid').textContent, /^[1-9]\d{5}$/);
   assert.equal(storage.get('lanuId'), h.get('myid').textContent);
 });
