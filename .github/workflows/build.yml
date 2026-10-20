@@ -81,7 +81,15 @@ jobs:
           KEY_ALIAS: ${{ secrets.LANU_RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.LANU_RELEASE_KEY_PASSWORD }}
         run: |
-          if [[ -n "$STORE_B64" && -n "$STORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+          configured=0
+          for secret in "$STORE_B64" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [[ -n "$secret" ]]; then configured=$((configured+1)); fi
+          done
+          if [[ "$configured" -gt 0 && "$configured" -lt 4 ]]; then
+            echo "::error::Incomplete release signing configuration; refusing a debug-signed fallback."
+            exit 1
+          fi
+          if [[ "$configured" -eq 4 ]]; then
             umask 077
             echo "$STORE_B64" | base64 --decode > "$RUNNER_TEMP/lanu-release.jks"
             echo "LANU_SIGNING_STORE_FILE=$RUNNER_TEMP/lanu-release.jks" >> "$GITHUB_ENV"
@@ -101,9 +109,9 @@ jobs:
           OTA_FEED: ${{ vars.LANU_OTA_MANIFEST_URL }}
           SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
-          if [[ -n "$PUBLIC_TOKEN" ]]; then
-            if [[ "$SIGNED" != "true" || -z "$PINNED_CERT" || -z "$OTA_FEED" ]]; then
-              echo "::error::OTA publishing requires a stable release signing key, pinned certificate and a public feed."
+          if [[ "$SIGNED" == "true" || -n "$PUBLIC_TOKEN" || -n "$PINNED_CERT" ]]; then
+            if [[ "$SIGNED" != "true" || -z "$PUBLIC_TOKEN" || -z "$PINNED_CERT" || -z "$OTA_FEED" ]]; then
+              echo "::error::Production OTA is only allowed with all signing secrets, public publisher token, certificate and feed configured."
               exit 1
             fi
           fi
