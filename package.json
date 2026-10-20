@@ -1,7 +1,7 @@
 {
   "name": "lanu-lens-verification",
   "private": true,
-  "version": "2.0.9",
+  "version": "2.0.10",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "test:webrtc": "node tests/webrtc-smoke.cjs"
