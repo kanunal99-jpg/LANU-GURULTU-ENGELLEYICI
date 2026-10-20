@@ -15,7 +15,7 @@
     const nav = env.navigator || {};
     const crypto = env.crypto || {};
     return {
-      online: nav.onLine !== false,
+      online: nav.onLine === true,
       secure: bool(env.isSecureContext),
       crypto: typeof crypto.subtle?.deriveKey === 'function',
       webrtc: typeof env.RTCPeerConnection === 'function',
