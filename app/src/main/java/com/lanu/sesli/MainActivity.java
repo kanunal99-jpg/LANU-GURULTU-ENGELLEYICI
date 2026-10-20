@@ -3,6 +3,10 @@ package com.lanu.sesli;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.media.Ringtone;
@@ -46,14 +50,17 @@ public class MainActivity extends Activity {
     private static final String TAG = "LANU";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/index.html";
-    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13;
+    private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFY = 14;
+    private static final String CALL_CHANNEL = "lanu-call-v1";
+    private static final String OPEN_INCOMING = "com.lanu.sesli.OPEN_INCOMING";
+    private static final int INCOMING_NOTIFICATION = 2901;
     private WebView web;
     private AudioManager audio;
     private PermissionRequest pendingMicrophone, pendingCamera;
     private Ringtone ringtone;
     private Vibrator vibrator;
     private ToneGenerator ringback;
-    private boolean ringing, ringingBack;
+    private boolean ringing, ringingBack, incomingAlert;
     private byte[] photoBytes;
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private final Runnable repeatRing = new Runnable() {
@@ -102,6 +109,7 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+        setupIncomingChannel();
         if (audio != null) audio.registerAudioDeviceCallback(devices, main);
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
@@ -124,6 +132,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView v, String url) {
+                if (HOME.equals(url)) openIncomingIfRequested();
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 return !localOrigin(r.getUrl()) || !r.getUrl().getPath().startsWith("/assets/");
             }
@@ -176,6 +187,7 @@ public class MainActivity extends Activity {
             }
         }
         if (code == BLUETOOTH) routeAudio();
+        if (code == NOTIFY && incomingAlert && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) updateIncomingAlert(true);
     }
 
     private final class AudioBridge {
@@ -188,6 +200,17 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void setRinging(boolean value) {
             main.post(() -> ring(value && visible && !destroyed));
+        }
+        @JavascriptInterface public void setIncomingNotification(boolean value) {
+            main.post(() -> updateIncomingAlert(value && visible && !destroyed));
+        }
+        @JavascriptInterface public void requestCallNotificationPermission() {
+            main.post(() -> {
+                if (destroyed || !visible) return;
+                if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, NOTIFY);
+                }
+            });
         }
         @JavascriptInterface public void setRingback(boolean value) {
             main.post(() -> ringBack(value && visible && !destroyed));
@@ -218,6 +241,61 @@ public class MainActivity extends Activity {
                 } else routeAudio();
             });
         }
+    }
+
+    private void openIncomingIfRequested() {
+        if (web == null || destroyed || !visible) return;
+        Intent intent = getIntent();
+        if (intent == null || !OPEN_INCOMING.equals(intent.getAction())) return;
+        // Consume exactly once: rotate/relaunch must not re-open an old invitation.
+        intent.setAction(null);
+        web.evaluateJavascript("window.LanuLens && window.LanuLens.promptForIncoming && window.LanuLens.promptForIncoming()", null);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openIncomingIfRequested();
+    }
+
+    private void setupIncomingChannel() {
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        NotificationChannel channel = new NotificationChannel(CALL_CHANNEL, "Lanu Lens bildirimleri", NotificationManager.IMPORTANCE_HIGH);
+        // The existing Android ringtone/vibration handles the sound while the
+        // app is in foreground. A second notification sound would play twice.
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
+        manager.createNotificationChannel(channel);
+    }
+
+    private void updateIncomingAlert(boolean value) {
+        incomingAlert = value;
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (!value) { manager.cancel(INCOMING_NOTIFICATION); return; }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return;
+        Intent open = new Intent(this, MainActivity.class)
+                .setAction(OPEN_INCOMING)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent tap = PendingIntent.getActivity(this, 301, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        // Intentionally never include peer code, name or private-area identity.
+        // Tap goes to existing camera/PIN flow; it never answers a call.
+        Notification note = new Notification.Builder(this, CALL_CHANNEL)
+                .setSmallIcon(R.drawable.ic_lanu)
+                .setContentTitle("Lanu Lens")
+                .setContentText("Yeni etkinlik var. Açmak için dokun.")
+                .setContentIntent(tap)
+                .setCategory(Notification.CATEGORY_CALL)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setVisibility(Notification.VISIBILITY_SECRET)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .build();
+        try { manager.notify(INCOMING_NOTIFICATION, note); }
+        catch (SecurityException e) { Log.w(TAG, "Incoming notification permission unavailable"); }
     }
 
     @SuppressWarnings("deprecation")
@@ -357,9 +435,11 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume(); visible = true;
         if (web != null) { web.onResume(); web.evaluateJavascript("window.lanuForeground && window.lanuForeground(); window.lanuResume && window.lanuResume()", null); }
+        openIncomingIfRequested();
     }
     @Override protected void onStop() {
         visible = false;
+        updateIncomingAlert(false);
         ring(false); ringBack(false);
         if(web!=null)web.evaluateJavascript("window.lanuBackground && window.lanuBackground()",null);
         pauseCall("Uygulama arka plana alındı; görüşme kapatıldı.");
@@ -373,6 +453,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.lanuBack ? window.lanuBack() : false",handled->{if(!"true".equals(handled))finish();});
     }
     @Override protected void onDestroy() {
+        updateIncomingAlert(false);
         ring(false); ringBack(false); setActive(false);
         files.shutdown(); photoBytes=null;
         destroyed = true;

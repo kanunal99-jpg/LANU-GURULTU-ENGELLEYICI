@@ -138,6 +138,12 @@
     await persist(data=>{const found=data.contacts.find(c=>c.code===code);if(found)found.name=name;else if(data.contacts.length<200)data.contacts.push({code,name});});
   }
   window.LanuLens={isOpen:()=>opened,canReceive:()=>allowIncoming&&!suspended,lock,stopCamera,
+    promptForIncoming() {
+      // A notification tap may offer PIN entry only for a live ringing call.
+      // It must never answer, start microphone capture or disclose caller data.
+      if (!opened && $('gate').hidden && $('photoView').hidden && !suspended &&
+          calls() && calls().state() === 'ringing') gate();
+    },
     callState(state){if(state!=='idle')stopCamera();if(opened&&state==='ringing'&&lastCallState!=='ringing')$('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});lastCallState=state;touch();},
     pairStatus(text){if(opened)$('pairStatus').textContent=text;},
     paired,
@@ -177,6 +183,11 @@
   });
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
   $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});
+  $('notificationPermission').addEventListener('click',()=>{
+    if(opened&&window.LanuAudio&&typeof window.LanuAudio.requestCallNotificationPermission==='function'){
+      window.LanuAudio.requestCallNotificationPermission();
+    }
+  });
   $('pairBtn').addEventListener('click',()=>{if(opened)calls().pair($('pairCode').value.trim());});
   $('pairAccept').addEventListener('click',()=>{if(!incomingPair)return;const req=incomingPair;incomingPair=null;$('pairRequest').hidden=true;req.respond(true);if($('saveIncoming').checked)paired(req.code);});
   $('pairReject').addEventListener('click',()=>{if(incomingPair)incomingPair.respond(false);incomingPair=null;$('pairRequest').hidden=true;});
