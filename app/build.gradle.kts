@@ -1,5 +1,10 @@
 plugins { id("com.android.application") }
 
+val otaManifestUrl = providers.environmentVariable("LANU_OTA_MANIFEST_URL").orNull ?: ""
+require(otaManifestUrl.isEmpty() || otaManifestUrl.matches(Regex("https://[A-Za-z0-9._/~%-]+"))) {
+    "LANU_OTA_MANIFEST_URL must be a plain HTTPS URL without query parameters"
+}
+
 android {
     namespace = "com.lanu.sesli"
     compileSdk = 35
@@ -9,7 +14,8 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("LANU_VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = "2.0.4"\n        buildConfigField("String", "OTA_MANIFEST_URL", "\\\"" + (providers.environmentVariable("LANU_OTA_MANIFEST_URL").orNull ?: "").replace("\\", "\\\\").replace("\\"", "\\\\"") + "\\\"")
+        versionName = "2.0.4"
+        buildConfigField("String", "OTA_MANIFEST_URL", "\"$otaManifestUrl\"")
         testInstrumentationRunner = "com.lanu.sesli.SmokeInstrumentation"
     }
     compileOptions {
@@ -18,4 +24,7 @@ android {
     }
     lint { abortOnError = true }
 }
-dependencies { implementation("androidx.webkit:webkit:1.11.0") }
+dependencies {
+    implementation("androidx.webkit:webkit:1.11.0")
+    implementation("androidx.core:core:1.13.1")
+}
