@@ -126,7 +126,7 @@ test('rejected and expired pairing requests cannot silently establish trust',asy
  now+=120001;
  assert.deepEqual(broker.listPairRequests(bt),[]);
  assert.throws(()=>broker.approvePairing(bt,second.requestId,a.deviceId),/consent denied/);
- await assert.rejects(()=>broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId,now)),/Pairing approval required/);
+ await assert.rejects(async()=>broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId,now)),/Pairing approval required/);
 });
 test('removing pairing and device revocation invalidate queued invitations',async()=>{
  const broker=new Broker(),a=await Auth.generate(webcrypto),b=await Auth.generate(webcrypto);
@@ -137,7 +137,7 @@ test('removing pairing and device revocation invalidate queued invitations',asyn
  await broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId));
  assert.equal(broker.removePairing(bt,a.deviceId),true);
  assert.deepEqual(broker.takeInvites(bt),[]);
- await assert.rejects(()=>broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId)),/Pairing approval required/);
+ await assert.rejects(async()=>broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId)),/Pairing approval required/);
  req=broker.requestPairing(at,b.deviceId);broker.approvePairing(bt,req.requestId,a.deviceId);
  await broker.submitInvite(at,await Auth.signInvite(webcrypto,a,b.deviceId));
  assert.equal(broker.revoke(at),true);
