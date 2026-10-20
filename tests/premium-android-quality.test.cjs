@@ -52,7 +52,7 @@ test('critical legacy camera and calls are kept intact during staged architectur
   assert.match(java,/LanuAudio/);
   assert.match(java,/LanuUpdate/);
   assert.match(manifest,/android:name="\.MainActivity"/);
-  assert.match(gradle,/versionName = "2\.0\.9"/);
+  assert.match(gradle,/versionName = "2\.0\.10"/);
 });
 
 test('WebRTC test WebSocket dependency uses a patched and integrity-pinned tarball',()=>{
