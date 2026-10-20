@@ -198,8 +198,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Private source repo release MUST expose all 4 binary/evidence assets.
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v2.0.10-build${GITHUB_RUN_NUMBER}" > "$RUNNER_TEMP/lanu-release.json"
-          node scripts/verify-release-evidence.cjs "$RUNNER_TEMP/lanu-release.json" dist "$GITHUB_SHA"
+          verified=false
+          for attempt in 1 2 3 4 5; do
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v2.0.10-build${GITHUB_RUN_NUMBER}" > "$RUNNER_TEMP/lanu-release.json" &&
+               node scripts/verify-release-evidence.cjs "$RUNNER_TEMP/lanu-release.json" dist "$GITHUB_SHA"; then
+              verified=true
+              break
+            fi
+            # Remote GitHub Release asset indexing may be eventually
+            # consistent. Delay briefly but NEVER mark absent assets green.
+            sleep "$((attempt * 3))"
+          done
+          if [[ "$verified" != true ]]; then
+            echo "::error::Release APK and signing evidence could not be verified"
+            exit 1
+          fi
       - name: OTA herkese açık sadece-APK dağıtımı
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signing.outputs.signed == 'true'
         env:
