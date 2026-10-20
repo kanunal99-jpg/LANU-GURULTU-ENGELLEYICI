@@ -10,7 +10,10 @@ async function startBroker({dbPath,socketPath}={}){
   if(typeof dbPath!=='string'||!path.isAbsolute(dbPath)||
      typeof socketPath!=='string'||!path.isAbsolute(socketPath)||
      dbPath===socketPath)throw Error('Absolute, distinct database and Unix socket paths required');
-  if(fs.existsSync(socketPath))throw Error('Refusing existing socket path (manual recovery required)');
+  try{
+    fs.lstatSync(socketPath);
+    throw Error('Refusing existing socket path (manual recovery required)');
+  }catch(error){if(error.code!=='ENOENT')throw error;}
   const store=new BrokerSqliteStore(dbPath);
   let server;
   try{
