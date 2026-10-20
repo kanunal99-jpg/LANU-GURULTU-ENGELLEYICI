@@ -22,6 +22,7 @@ class Broker {
     this.crypto=crypto;this.clock=clock;
     this.devices=new Map();this.challenges=new Map();this.sessions=new Map();
     this.pending=new Map();this.attempts=new Map();this.replay=new Auth.ReplayCache(1024);
+    this.pairRequests=new Map();this.trustedPairs=new Set();
   }
   random(bytes=16){return hex(this.crypto.getRandomValues(new Uint8Array(bytes)));}
   throttle(key,max=6){
@@ -100,6 +101,69 @@ class Broker {
       throw Error('Unauthorized');
     return session.id;
   }
+  pairKey(a,b) {
+    return [a,b].sort().join(':');
+  }
+  prunePairRequests() {
+    for(const [id,req] of this.pairRequests)
+      if(req.expiresAt<this.clock() ||
+         !this.devices.has(req.from) || this.devices.get(req.from).revoked ||
+         !this.devices.has(req.to) || this.devices.get(req.to).revoked)
+        this.pairRequests.delete(id);
+  }
+  requestPairing(token,recipientId) {
+    const from=this.authorize(token);
+    if(!idFormat(recipientId) || recipientId===from ||
+       !this.devices.has(recipientId) || this.devices.get(recipientId).revoked)
+      throw Error('Unknown pairing recipient');
+    this.throttle('pair:'+from,3);
+    this.prunePairRequests();
+    if(this.pairRequests.size>=1024)throw Error('Pairing capacity exhausted');
+    if(this.trustedPairs.has(this.pairKey(from,recipientId)))
+      throw Error('Devices already paired');
+    const requestId=this.random(),expiresAt=this.clock()+120000;
+    this.pairRequests.set(requestId,{from,to:recipientId,expiresAt});
+    return Object.freeze({requestId,expiresAt});
+  }
+  listPairRequests(token) {
+    const to=this.authorize(token);
+    this.prunePairRequests();
+    return [...this.pairRequests].filter(([,value])=>value.to===to)
+      .slice(0,10).map(([requestId,value])=>Object.freeze({
+        requestId,from:value.from,expiresAt:value.expiresAt
+      }));
+  }
+  approvePairing(token,requestId,expectedRequesterFingerprint) {
+    const to=this.authorize(token);
+    this.prunePairRequests();
+    const req=nonceFormat(requestId)?this.pairRequests.get(requestId):null;
+    if(!req || req.to!==to || req.from!==expectedRequesterFingerprint ||
+       !idFormat(expectedRequesterFingerprint))
+      throw Error('Pairing consent denied');
+    if(!this.devices.has(req.from)||this.devices.get(req.from).revoked)
+      throw Error('Requester revoked');
+    this.pairRequests.delete(requestId); // One-time consent.
+    if(this.trustedPairs.size>=10000)throw Error('Pairing capacity exhausted');
+    this.trustedPairs.add(this.pairKey(req.from,to));
+    return true;
+  }
+  rejectPairing(token,requestId) {
+    const to=this.authorize(token);
+    const req=nonceFormat(requestId)?this.pairRequests.get(requestId):null;
+    if(!req || req.to!==to)throw Error('Pairing consent denied');
+    this.pairRequests.delete(requestId);
+    return true;
+  }
+  removePairing(token,otherId) {
+    const device=this.authorize(token);
+    if(!idFormat(otherId))throw Error('Invalid device');
+    this.trustedPairs.delete(this.pairKey(device,otherId));
+    // Any already queued invitation from this revoked pairing is invalidated.
+    for(const id of [device,otherId])
+      this.pending.set(id,(this.pending.get(id)||[]).filter(invite=>
+        this.trustedPairs.has(this.pairKey(invite.body.from,invite.body.to))));
+    return true;
+  }
   async submitInvite(token,envelope){
     const from=this.authorize(token);
     if(!envelope||!envelope.body||envelope.body.from!==from)
@@ -108,9 +172,16 @@ class Broker {
     const to=envelope.body.to,recipient=this.devices.get(to),sender=this.devices.get(from);
     if(!recipient||recipient.revoked||!sender||sender.revoked||to===from)
       throw Error('Unknown recipient');
+    if(!this.trustedPairs.has(this.pairKey(from,to)))throw Error('Pairing approval required');
     const now=this.clock();
     if(!await Auth.verifyInvite(this.crypto,envelope,sender.publicKey,from,to,this.replay,now))
       throw Error('Rejected invitation');
+    // Signature verification is asynchronous; recheck authorization/consent
+    // after it resolves so revocation while verifying cannot enqueue a call.
+    if(this.authorize(token)!==from || !this.devices.has(to) ||
+       this.devices.get(to).revoked ||
+       !this.trustedPairs.has(this.pairKey(from,to)))
+      throw Error('Pairing approval required');
     const pending=this.pending.get(to)||[];
     const active=pending.filter(e=>e.body.expiresAt>=now);
     if(active.length>=10)throw Error('Recipient busy');
@@ -119,7 +190,9 @@ class Broker {
   }
   takeInvites(token){
     const id=this.authorize(token);
-    const items=(this.pending.get(id)||[]).filter(e=>e.body.expiresAt>=this.clock());
+    const items=(this.pending.get(id)||[]).filter(e=>e.body.expiresAt>=this.clock() &&
+      this.devices.has(e.body.from) && !this.devices.get(e.body.from).revoked &&
+      this.trustedPairs.has(this.pairKey(e.body.from,id)));
     this.pending.delete(id);
     return items;
   }
@@ -127,6 +200,11 @@ class Broker {
     const id=this.authorize(token);
     this.devices.get(id).revoked=true;
     this.pending.delete(id);
+    for(const pair of this.trustedPairs)if(pair.split(':').includes(id))this.trustedPairs.delete(pair);
+    for(const [requestId,req] of this.pairRequests)
+      if(req.from===id || req.to===id)this.pairRequests.delete(requestId);
+    for(const [target,items] of this.pending)
+      this.pending.set(target,items.filter(invite=>invite.body.from!==id));
     for(const [key,value] of this.sessions) if(value.id===id)this.sessions.delete(key);
     return true;
   }
