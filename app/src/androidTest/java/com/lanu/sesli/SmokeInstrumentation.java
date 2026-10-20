@@ -74,11 +74,11 @@ public class SmokeInstrumentation extends Instrumentation {
             js(web,"document.getElementById('updatesTab').click()");
             require(web,"!document.getElementById('updatesPane').hidden && document.getElementById('callsPane').hidden","Update tab opens behind PIN");
             require(web,"document.getElementById('checkUpdates') !== null && document.getElementById('downloadUpdate') !== null && document.getElementById('installUpdate') !== null","OTA controls exist");
-            Thread.sleep(450); // Allow native version-check messages to settle before UI state assertions.
-            js(web,"window.lanuUpdateEvent({state:'available',version:'2.0.6',versionCode:99,message:'Update test'})");
-            require(web,"!document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden","New build offers one-tap download and install");
-            js(web,"window.lanuUpdateEvent({state:'ready',version:'2.0.6',versionCode:99,message:'Verified'})");
-            require(web,"document.getElementById('downloadUpdate').hidden && !document.getElementById('installUpdate').hidden","Verified APK allows installer retry");
+            // Native OTA checks are asynchronous; verify event and resulting UI
+            // in a single WebView JS transaction to avoid a network callback
+            // racing with separate synthetic event/assertion evaluations.
+            require(web,"(window.lanuUpdateEvent({state:'available',version:'2.0.9',versionCode:999999,message:'Update test'}), !document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden)","New build offers one-tap download and install");
+            require(web,"(window.lanuUpdateEvent({state:'ready',version:'2.0.9',versionCode:999999,message:'Verified'}), document.getElementById('downloadUpdate').hidden && !document.getElementById('installUpdate').hidden)","Verified APK allows installer retry");
             js(web,"document.getElementById('callsTab').click()");
             require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
