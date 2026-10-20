@@ -11,7 +11,7 @@ function verifyReleaseEvidence(release,dist,expectedCommit){
  const byName=new Map();
  for(const asset of release.assets){
   if(!asset||typeof asset.name!=='string'||!Number.isSafeInteger(asset.size)||
-    byName.has(asset.name))throw Error('Invalid or duplicate release asset');
+     byName.has(asset.name))throw Error('Invalid or duplicate release asset');
   byName.set(asset.name,asset.size);
  }
  if(byName.size!==REQUIRED.length)throw Error('Unexpected release asset count');
@@ -23,38 +23,29 @@ function verifyReleaseEvidence(release,dist,expectedCommit){
  }
  const apk=fs.readFileSync(path.join(dist,REQUIRED[0]));
  const sha=crypto.createHash('sha256').update(apk).digest('hex');
- const lines=fs.readFileSync(path.join(dist,REQUIRED[1]),'utf8').trim();
- if(lines!==sha+'  '+REQUIRED[0]&&lines!==sha+' '+REQUIRED[0])
+ const sum=fs.readFileSync(path.join(dist,REQUIRED[1]),'utf8').trim();
+ if(sum!==sha+'  '+REQUIRED[0]&&sum!==sha+' '+REQUIRED[0])
    throw Error('SHA256SUMS does not match attached APK');
  const signer=fs.readFileSync(path.join(dist,'APK-IMZA-DURUMU.txt'),'utf8');
- if(!/^SIGNING_MODE=(DEBUG|PRODUCTION)$/m.test(signer)||
-    !/^APK_PACKAGE=com\.lanu\.sesli$/m.test(signer)||
-    !/^APK_CERT_SHA256=[a-f0-9]{64}$/m.test(signer) ||
-    !new RegExp('^APK_VERSION_CODE='+tag[1]+'
- if(/^SIGNING_MODE=DEBUG$/m.test(signer)&&!/^OTA_COMPATIBLE=NO$/m.test(signer))
-    throw Error('Debug APK incorrectly claims OTA support');
+ const lines=signer.split(/\r?\n/);
+ if(!lines.some(v=>v==='SIGNING_MODE=DEBUG'||v==='SIGNING_MODE=PRODUCTION')||
+    !lines.includes('APK_PACKAGE=com.lanu.sesli')||
+    !lines.some(v=>/^APK_CERT_SHA256=[a-f0-9]{64}$/.test(v))||
+    !lines.includes('APK_VERSION_CODE='+tag[1])||
+    !lines.includes('APK_VERSION_NAME=2.0.10'))
+   throw Error('Missing or mismatched APK signing evidence');
+ if(lines.includes('SIGNING_MODE=DEBUG')&&!lines.includes('OTA_COMPATIBLE=NO'))
+   throw Error('Debug APK incorrectly claims OTA support');
  return {releaseVerified:true,sha256:sha,size:apk.length};
 }
 module.exports={verifyReleaseEvidence};
 if(require.main===module){
  try{
   const input=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-  const result=verifyReleaseEvidence(input,process.argv[3],process.argv[4]);
-  process.stdout.write('APK asset count, sizes, SHA-256, signer and release commit verified\n');
- }catch(error){process.stderr.write('Release evidence verification failed: '+error.message+'\n');process.exitCode=1;}
-}
-,'m').test(signer) ||
-    !/^APK_VERSION_NAME=2\.0\.10$/m.test(signer))
-    throw Error('Missing or mismatched APK signing evidence');
- if(/^SIGNING_MODE=DEBUG$/m.test(signer)&&!/^OTA_COMPATIBLE=NO$/m.test(signer))
-    throw Error('Debug APK incorrectly claims OTA support');
- return {releaseVerified:true,sha256:sha,size:apk.length};
-}
-module.exports={verifyReleaseEvidence};
-if(require.main===module){
- try{
-  const input=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-  const result=verifyReleaseEvidence(input,process.argv[3],process.argv[4]);
-  process.stdout.write('APK asset count, sizes, SHA-256, signer and release commit verified\n');
- }catch(error){process.stderr.write('Release evidence verification failed: '+error.message+'\n');process.exitCode=1;}
+  verifyReleaseEvidence(input,process.argv[3],process.argv[4]);
+  process.stdout.write('APK asset sizes, SHA-256, signer, tag and release commit verified\n');
+ }catch(error){
+  process.stderr.write('Release evidence verification failed: '+error.message+'\n');
+  process.exitCode=1;
+ }
 }
