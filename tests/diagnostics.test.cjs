@@ -7,7 +7,22 @@ const lens=fs.readFileSync('app/src/main/assets/lens.js','utf8');
 const css=fs.readFileSync('app/src/main/assets/style.css','utf8');
 function mockDocument(locked=false){
   const elements=new Map();
-  function el(id){if(!elements.has(id))elements.set(id,{id,hidden:false,textContent:'',children:[],replaceChildren(){this.children=[];},append(...children){this.children.push(...children);},setAttribute(name,value){this[name]=value;}});return elements.get(id);}
+  function el(id){
+    if(!elements.has(id)){
+      const node={id,hidden:false,children:[],_text:'',
+        replaceChildren(){this.children=[];},
+        append(...children){this.children.push(...children);},
+        setAttribute(name,value){this[name]=value;}};
+      // Native DOM: assigning textContent clears every existing child.
+      // Chrome74 supports this even though replaceChildren is unavailable.
+      Object.defineProperty(node,'textContent',{
+        get(){return this._text;},
+        set(value){this._text=value;this.children=[];}
+      });
+      elements.set(id,node);
+    }
+    return elements.get(id);
+  }
   el('diagnosticsPane').hidden=locked;el('privateView').hidden=locked;el('diagnosticsResults');el('diagnosticsSummary');
   return {getElementById:el,createElement:tag=>({tagName:tag,textContent:'',dataset:{},children:[],append(...children){this.children.push(...children);}})};
 }
