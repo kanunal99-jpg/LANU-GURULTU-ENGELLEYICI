@@ -60,7 +60,7 @@ echo "Signer #1 certificate SHA-256 digest: $(printf 'a%.0s' $(seq 1 64))"
     fs.writeFileSync(logfile,'');
     run=cp.spawnSync('bash',[script],{encoding:'utf8',env:{...shared,MOCK_VISIBILITY:'PUBLIC'}});
     assert.notEqual(run.status,0);
-    assert.match(run.stdout+run.stderr,/signing certificate does not match/);
+    assert.match(run.stdout+run.stderr,/release signature does not match pinned fingerprint/);
     assert.doesNotMatch(fs.readFileSync(logfile,'utf8'),/release create/);
   }finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
