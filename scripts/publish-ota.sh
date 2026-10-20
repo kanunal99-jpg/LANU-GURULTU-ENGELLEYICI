@@ -68,8 +68,15 @@ tag="v${OTA_VERSION}-build${GITHUB_RUN_NUMBER}"
 checksum="$(sha256sum "${OTA_APK}" | awk '{print $1}')"
 bytes="$(stat -c%s "${OTA_APK}")"
 [[ "${bytes}" -ge 1024 && "${bytes}" -le 167772160 ]] || exit 1
-if gh release view "${tag}" --repo "${repo}" >/dev/null 2>&1; then
+# Do not treat GitHub auth/rate-limit/5xx failure as a missing release tag.
+# Only an explicit tag 404 permits publication.
+if gh api "repos/${repo}/releases/tags/${tag}" > "${workdir}/tag.json" 2> "${workdir}/tag.err"; then
   echo "::error::Public tag already exists; do not silently replace a released APK"
+  exit 1
+elif grep -Eq 'HTTP 404|HTTP 404[)]|Not Found [(]HTTP 404[)]' "${workdir}/tag.err"; then
+  echo "::notice::Public release tag is available."
+else
+  echo "::error::Cannot verify public release tag (auth/network/API error); refusing publication."
   exit 1
 fi
 printf '%s  %s\n' "${checksum}" "${filename}" > "${workdir}/SHA256SUMS.txt"
