@@ -1,10 +1,21 @@
-# Lanu Lens 2.0.8 — profesyonel OTA sertleştirme
+# Lanu Lens 2.0.9 — LANU Premium Professional güvenlik / üretim kalite paketi
 
-- Uygulama içi güncelleme menüsü yalnızca **PIN doğrulandıktan sonra** kullanılabilir. Android tarafı da kullanıcı PIN ile girdiğinde özel alanın kilidinin açık olduğunu doğrular. WebView başka sayfaya geçtiğinde, uygulama kilitlendiğinde veya arka plana alındığında native OTA yetkisi anında geçersizleşir.
-- **Kritik yarış durumu düzeltildi:** İndirme ve SHA-256/paket/imza doğrulaması tamamlandığında kullanıcı özel alanı kilitlediyse, Android sistem kurulum ekranı veya bilinmeyen kaynak izni ekranı artık kendiliğinden başlatılmaz. Doğrulanmış dosya saklanabilir; kuruluma ancak PIN ile yeniden girişten sonra kullanıcı eylemiyle devam edilir.
-- Sürüm manifesti HTTP önbelleğinden değil yenilenmiş HTTPS isteğinden okunur (`Cache-Control: no-cache, no-store`). Yanlış ve bozuk manifest/indirilen APK önceki sürümü değiştiremez.
-- Public OTA yayın aracı **403/500/API kesintisi** durumlarını ilk yayın sanıp manifesti ilerletmez; yalnızca gerçek 404 ilk dağıtıma izin verir. Yayıncı, APK sertifikasını ve uzak indirilen APK SHA-256'yı doğrulamadan `latest.json` güncellemez.
-- Regresyon testleri: PIN ve native OTA durum geçişi, WebView navigasyon kilidi, public manifest hata matrisi 403/404/500, Android 15 emülatörde gerçek PIN/screen gate ve bozulmuş APK denetimi. JavaScript, WebRTC ve Android lint/derleme kontrolleri korunur.
-- Arka plandayken çağrı teslimi hâlâ ayrıca yetkili arka uç+FCM gerektirir; OTA değişikliği bu fonksiyonu varmış gibi göstermez.
+## Uygulanan ve regresyon testine alınan değişiklikler
 
-**Üretim etkinleştirme bekliyor:** Ayrı public binary-only `LANU-LENS-OTA` deposu, yedekli kalıcı production keystore, GitHub Actions Secrets/Variables ve gerçek iki Android cihazda ardışık yerinde kurulum doğrulaması. Bu bilgiler yoksa yalnızca debug-signed APK yayımlanır; önceki debug paketin üzerine yüklenmeyebilir. Android kullanıcı onayı olmadan sessiz kurulum yapılmaz.
+- **R8/ProGuard üretim optimizasyonu:** release build'inde sınıf/metot küçültme/obfuscation ve Android resource shrinking etkin. Dar kapsamlı `@JavascriptInterface` keep kuralları PIN, kamera, WebRTC, OTA, fotoğraf ve izin köprülerinin R8 sonrasında da bulunmasını hedefler.
+- **Çalıştırılabilir yayın doğrulaması:** CI artık release APK DEX içinde kritik Android/JavaScript yöntem adlarını doğrular; release `mapping.txt` private workflow artifact'ına eklenir. Debug ve optimize release Android derlemesi/lint kontrolleriyle birlikte WebRTC ve gerçek Android 15 emülatör testi korunmuştur.
+- **Gradle Version Catalog:** Android Gradle Plugin, AndroidX Core ve AndroidX WebKit sürümleri tek TOML'da. Yeni gereksiz SDK eklenmedi.
+- **WebView güvenliği:** indirilebilir debug APK'da bile Chrome WebView debugging kapalı. Android Safe Browsing etkin, çoklu pencere, geolocation, üçüncü taraf cookie ve file:// erişimleri kapalı. Eksik yerel asset URL'si artık uzaktaki host'a fall back olmadan 404 döner.
+- **İzin ayrımı:** Kamera kamuya açık kamera ekranında çalışmayı sürdürür; WebRTC mikrofon isteği ve geciken Android mikrofon onayı yalnızca PIN doğrulanmış özel alanda geçerli olur.
+- **Bağımlılık güvenliği:** GitHub Actions üzerinde Node paketleri high/critical vulnerability audit kontrolü.
+- **Proje yönetimi:** `docs/PREMIUM-ANDROID-STANDARD-2026-10-20.md`, kullanıcı master promptuna karşı gerçek uyumluluk ve aşamalı dönüşüm önceliklerini; `AGENTS.md` korumalı yayın standardını kaydeder.
+
+## Geriye uyumluluk / uyarılar
+
+- Android paket kimliği `com.lanu.sesli` değişmedi; mevcut Java/WebView, şifreli PIN vault, PeerJS/WebRTC, fotoğraf ve OTA kullanıcı akışları korunmaktadır.
+- **Bu sürüm tam Compose/Hilt/Kotlin/MVVM veya Crashlytics uygulaması değildir.** Bunlar parçalı modernizasyon ve Firebase proje yetkisi gerektirir. Sahte yapılandırma yapılmadı.
+- **Üretim OTA hâlâ etkin değil:** kullanıcı tarafından yedeklenmiş uzun ömürlü signing key, public binary-only `LANU-LENS-OTA` deposu, secrets/vars ve iki üretim APK'sıyla gerçek cihaz üstüne güncelleme doğrulaması gerekli. İmza farklıysa debug APK üzerine veri koruyarak yüklemek mümkün değildir.
+- Uygulama kapalıyken gerçek çağrı almak, Firebase push/kimlik doğrulanmış sunucu entegrasyonu tamamlanana kadar desteklenmez.
+- Android APK kurulumunda sistem kullanıcı onayı zorunludur; Play'de yayımlanmadı.
+
+**Kanıt standardı:** yalnızca PR + main CI testleri başarılı, release asset yüklendi ve SHA-256 doğrulandıktan sonra APK yayımlandı sayılacaktır.
