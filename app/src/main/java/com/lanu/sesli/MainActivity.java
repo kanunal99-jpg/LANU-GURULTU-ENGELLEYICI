@@ -450,11 +450,35 @@ public class MainActivity extends Activity {
             }
             final Uri destination=data.getData();
             files.execute(()->{
-                boolean ok=false;
-                try(OutputStream out=getContentResolver().openOutputStream(destination,"wt")){
-                    if(out!=null){out.write(bytes);out.flush();ok=true;}
-                }catch(Exception exception){Log.w(TAG,"Encrypted backup export failed");}
-                final boolean saved=ok;main.post(()->backupResult("save",saved));
+                boolean saved=false;
+                try {
+                    // Closing the provider stream is not proof of a complete
+                    // persisted copy. Reopen and verify the exact ciphertext.
+                    try(OutputStream out=getContentResolver().openOutputStream(destination,"wt")){
+                        if(out==null)throw new java.io.IOException("Document provider refused write");
+                        out.write(bytes);
+                        out.flush();
+                    }
+                    java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+                    int total=0;
+                    byte[] block=new byte[8192];
+                    try(java.io.InputStream stream=getContentResolver().openInputStream(destination)){
+                        if(stream==null)throw new java.io.IOException("Document provider refused readback");
+                        int count;
+                        while((count=stream.read(block))!=-1){
+                            total+=count;
+                            if(total>MAX_BACKUP_BYTES)throw new java.io.IOException("Unexpected backup size");
+                            digest.update(block,0,count);
+                        }
+                    }
+                    byte[] expected=java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
+                    saved=total==bytes.length &&
+                            java.security.MessageDigest.isEqual(expected,digest.digest());
+                }catch(Exception exception){
+                    Log.w(TAG,"Encrypted backup could not be read back and verified");
+                }finally{java.util.Arrays.fill(bytes,(byte)0);}
+                final boolean verified=saved;
+                main.post(()->backupResult("save",verified));
             });
             return;
         }

@@ -128,3 +128,19 @@ test('backup export UI requires matching passphrases and encrypted round-trip ve
  assert.ok(js.includes("window.LanuEncryptedTransfer.verifyBackup"));
  assert.ok(js.includes("if(!verified || !opened || token!==gateEpoch"));
 });
+
+
+test('SAF export verifies full ciphertext by reopening the picked document before reporting success',()=>{
+ const fs=require('node:fs'),java=fs.readFileSync('app/src/main/java/com/lanu/sesli/MainActivity.java','utf8');
+ const begin=java.indexOf('if(code==SAVE_BACKUP)'),end=java.indexOf('if(code==LOAD_BACKUP)',begin);
+ assert.ok(begin>=0&&end>begin);
+ const section=java.slice(begin,end);
+ assert.ok(section.includes('getContentResolver().openOutputStream(destination,"wt")'));
+ assert.ok(section.includes('getContentResolver().openInputStream(destination)'));
+ assert.ok(section.includes('total>MAX_BACKUP_BYTES'));
+ assert.ok(section.includes('total==bytes.length'));
+ assert.ok(section.includes('MessageDigest.isEqual(expected,digest.digest())'));
+ assert.ok(section.includes('java.util.Arrays.fill(bytes,(byte)0)'));
+ assert.ok(section.includes('backupResult("save",verified)'));
+ assert.equal(section.includes('out.flush();ok=true;'),false,'No unverified write-only success');
+});
