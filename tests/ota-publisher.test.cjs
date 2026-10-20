@@ -22,7 +22,7 @@ test('publisher only uploads verified signed APKs to binary-only public destinat
  assert.match(source,/expected_cert/);
  assert.match(source,/gh release download/);
  assert.match(source,/sha256sum -c/);
- assert.ok(source.indexOf('gh release download')<source.indexOf('contents\/latest.json\" -f'));
+ assert.ok(source.indexOf('gh release download')<source.indexOf('gh api "${args[@]}"'));
  assert.match(source,/old_code >= GITHUB_RUN_NUMBER/);
 });
 test('production publishing has explicit fail-closed signing prerequisite and no source repo release exposure',()=>{
