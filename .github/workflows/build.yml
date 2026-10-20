@@ -42,6 +42,8 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           export LANU_CHROME_EXECUTABLE="$(command -v google-chrome)"
           npm run test:webrtc
+      - name: Bağımlılık güvenlik denetimi
+        run: npm audit --audit-level=high --no-fund
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
