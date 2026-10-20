@@ -74,7 +74,7 @@ test('version pinning prevents a remote older APK from being installed',()=>{
 test('production OTA feed is pinned by default before the public mirror exists',()=>{
   assert.match(gradle,/defaultOtaManifestUrl = "https:\/\/raw\.githubusercontent\.com\/kanunal99-jpg\/LANU-LENS-OTA\/main\/latest\.json"/);
   assert.match(gradle,/otaManifestUrl == defaultOtaManifestUrl/);
-  assert.match(gradle,/versionName = "2\.0\.7"/);
+  assert.match(gradle,/versionName = "2\.0\.8"/);
   assert.match(java,/Manifest HTTP status: 404/);
 });
 test('installer re-verifies the on-disk APK when the user taps install',()=>{
