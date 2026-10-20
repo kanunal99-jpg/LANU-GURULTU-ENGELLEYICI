@@ -78,7 +78,7 @@ test('storage quota error cannot leave restored route behind when vault write fa
 
 test('background/PIN-gate cancellation after slow KDF prevents writing any restored data',async()=>{
  const source=await prepared(),bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
- const target=storage();target.setItem('lanuId','123456');
+ const target=storage();target.setItem('lanuId','987654');
  let checks=0;
  await assert.rejects(()=>transfer.importBackup({
    storage:target,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle,
@@ -86,7 +86,7 @@ test('background/PIN-gate cancellation after slow KDF prevents writing any resto
  }),/Cancelled/);
  assert.equal(checks,1);
  assert.equal(target.getItem('lens-vault-v1'),null);
- assert.equal(target.getItem('lanuId'),'123456');
+ assert.equal(target.getItem('lanuId'),'987654');
 });
 test('Android SAF backup bridge is PIN-gated, limited and uses system document picker',()=>{
  const fs=require('node:fs');
