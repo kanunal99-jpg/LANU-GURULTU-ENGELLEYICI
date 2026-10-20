@@ -290,11 +290,11 @@ final class LanuUpdater {
     }
     void close(){destroyed=true;io.shutdownNow();}
 
-    private static boolean isFeedUrl(String url){
+    static boolean isFeedUrl(String url){
         // Even if a build configuration changes, never accept an unreviewed host or path.
         return "https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json".equals(url);
     }
-    private static boolean isExpectedReleaseUrl(String url,String version,int code){
+    static boolean isExpectedReleaseUrl(String url,String version,int code){
         if(code<=0 || version==null || !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+"))return false;
         try {
             URL u=new URL(url);
