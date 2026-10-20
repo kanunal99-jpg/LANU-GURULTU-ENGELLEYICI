@@ -37,6 +37,7 @@ public class SmokeInstrumentation extends Instrumentation {
             }
             if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
             verifyOtaDigestRejectsTampering(target);
+            verifyPinnedSignerFailClosed();
             assertUpdaterGate(target, false, "Locked camera must block native OTA");
             // Debug builds never claim real OTA even when a public feed exists.
             if (BuildConfig.DEBUG && new LanuUpdater(target).productionOtaConfigured())
@@ -128,6 +129,22 @@ public class SmokeInstrumentation extends Instrumentation {
         throw new AssertionError(description+"; expected="+expected+" actual="+granted);
     }
     /** Same-size and truncated APK tampering must be detected before installer opens. */
+    private static void verifyPinnedSignerFailClosed() throws Exception {
+        android.content.pm.Signature onlySigner=new android.content.pm.Signature(
+                new byte[]{3,9,27,1,8,6,42});
+        byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(onlySigner.toByteArray());
+        StringBuilder builder=new StringBuilder(64);
+        for(byte entry:hash)builder.append(String.format(java.util.Locale.ROOT,"%02x",entry&255));
+        String known=builder.toString();
+        if(!LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},known))
+            throw new AssertionError("Correct installed signer must match its digest");
+        if(LanuUpdater.matchesPinnedSigner(null,known)
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{},known)
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner,onlySigner},known)
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"0".repeat(64))
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"invalid"))
+            throw new AssertionError("Missing, altered or multiple installed signers accepted");
+    }
     private static void verifyOtaDigestRejectsTampering(Activity target) throws Exception {
         java.io.File file=java.io.File.createTempFile("lanu-ota-integrity-", ".bin", target.getCacheDir());
         try {

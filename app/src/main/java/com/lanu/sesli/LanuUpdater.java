@@ -79,10 +79,34 @@ final class LanuUpdater {
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
+    static boolean matchesPinnedSigner(Signature[] signers,String pinnedSha256) {
+        if(signers==null||signers.length!=1||pinnedSha256==null
+                ||!pinnedSha256.matches("[0-9a-f]{64}")||signers[0]==null)return false;
+        try {
+            String actual=hex(MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray()));
+            return MessageDigest.isEqual(actual.getBytes(StandardCharsets.US_ASCII),
+                    pinnedSha256.getBytes(StandardCharsets.US_ASCII));
+        }catch(Exception exception){return false;}
+    }
+    private boolean installedSignerMatchesPinnedCert() {
+        try {
+            final int flags=Build.VERSION.SDK_INT>=28
+                    ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            PackageInfo installed=activity.getPackageManager().getPackageInfo(activity.getPackageName(),flags);
+            Signature[] signers=Build.VERSION.SDK_INT>=28
+                    ? (installed.signingInfo==null?null:installed.signingInfo.getApkContentsSigners())
+                    : installed.signatures;
+            return matchesPinnedSigner(signers,BuildConfig.OTA_RELEASE_CERT_SHA256);
+        }catch(PackageManager.NameNotFoundException|RuntimeException exception){
+            // Missing package metadata is never proof of a production signer.
+            return false;
+        }
+    }
     boolean productionOtaConfigured() {
-        // A debug/unpinned build is never allowed to advertise production OTA.
-        return !BuildConfig.DEBUG && BuildConfig.OTA_RELEASE_CERT_SHA256.matches("[0-9a-f]{64}")
-                && isFeedUrl(BuildConfig.OTA_MANIFEST_URL);
+        // Build variables alone are not evidence. The *installed APK* must
+        // carry the exact pinned signer before offering a data-preserving OTA.
+        return !BuildConfig.DEBUG && isFeedUrl(BuildConfig.OTA_MANIFEST_URL)
+                && installedSignerMatchesPinnedCert();
     }
     private boolean readyForInstall() {
         return productionOtaConfigured() && latest != null && latest.code > installedCode()
