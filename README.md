@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.4.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.5.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -63,10 +63,19 @@ PIN ile özel alana gir → **Güncelleme Kontrol** → **Güncelleme denetle**.
 
 ### OTA dağıtımının tamamlanması için
 
-Kaynak kodları ve tüm kişisel verileri içeren **özel repo kesinlikle herkese açılmamalı**. Sadece APK + `latest.json` içeren, herkese okunabilir bir **LANU-LENS-OTA** dağıtım deposu kullanılır; dosya adı `Lanu-Lens-2.0.4.apk`, release etiketi `v2.0.4-buildN`; JSON şu şemada: `{"schema":1,"versionCode":N,"versionName":"2.0.4","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.4-buildN/Lanu-Lens-2.0.4.apk","sha256":"64-küçük-harf-hex","sizeBytes":123456}`.
+Kaynak kodları ve tüm kişisel verileri içeren **özel repo kesinlikle herkese açılmamalı**. Sadece APK + `latest.json` içeren, herkese okunabilir bir **LANU-LENS-OTA** dağıtım deposu kullanılır; dosya adı `Lanu-Lens-2.0.5.apk`, release etiketi `v2.0.5-buildN`; JSON şu şemada: `{"schema":1,"versionCode":N,"versionName":"2.0.5","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.5-buildN/Lanu-Lens-2.0.5.apk","sha256":"64-küçük-harf-hex","sizeBytes":123456}`.
 
 GitHub Actions, üretim anahtarı sağlandığında **yalnızca özel workflow artifact'ı** olarak `dist/latest.json` hazırlar; APK ve JSON'u halka açık ikili dağıtım reposuna göndermek henüz otomatik değildir. Bu adım için depo ve yetkili yayın mekanizması kurulmalı; yayınlanan JSON'daki APK URL'si gerçekten indirilebilir olmalıdır. Android'e gömülen URL, yeni APK üretildiği güncel kamuya açık `latest.json` adresi olmalıdır.
 
 Github Actions deposunda `LANU_OTA_MANIFEST_URL` isimli **Actions variable** ekleyin (örnek: `https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json`). Aynı **kalıcı üretim keystore** ve sırları `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD` isimli GitHub Actions Secrets'a güvenli şekilde girilmelidir. Keystore kaybedilmemeli ve kaynak depoya işlenmemelidir. Bu anahtarla dağıtılan APK, farklı geçmiş debug anahtarından otomatik olarak verileri koruyarak yükseltilemez. Kurulumdan önce PIN/rehber veri yedeği ve güvenli geçiş planı oluşturulmalıdır.
 
 **Henüz yapılandırılmamış kurulumda** denetim düğmesi durumu doğru bildirir, otomatik güncelleme varmış gibi göstermez. Uygulama APK URL'sini veya gizli anahtarları JavaScript'ten kabul etmez; yalnızca build sırasında tanımlı doğrulanmış HTTPS kaynağını kullanır. İzin reddi, internet kesintisi ve imza uyumsuzluğunda güvenli şekilde durur.
+
+
+### OTA yayın otomasyonu (1. paket)
+
+`scripts/publish-ota.sh` sadece **production keystore ile imzalanmış**, gerçek Android imza sertifikası `LANU_RELEASE_CERT_SHA256` ile eşleşen APK'yı herkese açık **yalnızca binary** `kanunal99-jpg/LANU-LENS-OTA` deposuna yollar. Önce public release'e APK ve SHA256SUMS.txt yüklenir, public dosya geri indirilip aynı SHA ile doğrulanır. **Ancak bundan sonra** `latest.json` main dalında güncellenir; eski build yeni sürümün üzerine yazılamaz. Token yoksa otomatik yayın yapılmaz, private repo sürümü normal yayımlanır.
+
+Telefonla tek seferlik kurulum: GitHub'da yeni `LANU-LENS-OTA` deposunu **Public**, README ile oluştur (kaynak repo özel kalacak). Güvenli ve yedekli kalıcı keystore oluştur. Özel kaynak reposunun Settings → Secrets and variables → Actions bölümünde 4 kalıcı anahtar secret'ını `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD` adıyla gir. `LANU_OTA_PUBLISH_TOKEN` için yalnızca OTA public deposuna **Contents: Read and write** izni olan fine-grained GitHub token kullan; bu token'ı APK, latest.json, commit veya sohbete yapıştırma. `LANU_RELEASE_CERT_SHA256` Actions variable'ına keytool/apksigner'dan alınan imza sertifika özetini (64 hex), `LANU_OTA_MANIFEST_URL` Actions variable'ına `https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json` yaz. Sonraki main CI, imzalı APK'yı doğrulayarak public depoya gönderir. **İlk stable sürümü kurmadan önce** keystore'un güvenli, ayrı yedeğini al; her sonraki sürümde aynısını kullan.
+
+Uygulama içinde sürüm kontrolü HTTPS, SHA ve imza kontrollerine bağlıdır; Android onayı olmadan arka planda sessiz kurulum yapılamaz.
