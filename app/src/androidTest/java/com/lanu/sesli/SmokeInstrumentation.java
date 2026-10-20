@@ -63,6 +63,13 @@ public class SmokeInstrumentation extends Instrumentation {
             long unlockLimit=System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<unlockLimit && !"true".equals(js(web,"!document.getElementById('privateView').hidden")))Thread.sleep(100);
             require(web,"!document.getElementById('privateView').hidden","PIN setup opens private area");
+            require(web,"typeof window.LanuUpdate.info === 'function' && typeof window.LanuUpdate.check === 'function' && typeof window.LanuUpdate.install === 'function'","OTA native bridge exists");
+            require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab defaults visible");
+            js(web,"document.getElementById('updatesTab').click()");
+            require(web,"!document.getElementById('updatesPane').hidden && document.getElementById('callsPane').hidden","Update tab opens behind PIN");
+            require(web,"document.getElementById('checkUpdates') !== null && document.getElementById('downloadUpdate') !== null && document.getElementById('installUpdate') !== null","OTA controls exist");
+            js(web,"document.getElementById('callsTab').click()");
+            require(web,"document.getElementById('updatesPane').hidden && !document.getElementById('callsPane').hidden","Calls tab restored");
             require(web,"(window.LanuLens.lock(),document.getElementById('privateView').hidden && !document.getElementById('cameraView').hidden)","Lock restores camera");
             require(web,"!document.body.innerText.match(/görüşme|rehber|eşleştirme|gizli|PIN/i)","No private hints after lock");
             // Exercise natural finger drift on the centered target where it
