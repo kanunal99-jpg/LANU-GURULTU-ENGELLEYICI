@@ -36,3 +36,24 @@ body {max-width:none;padding:0;background:#101217}button {cursor:pointer}input[t
 #updatesPane p { overflow-wrap:anywhere; }
 #updateStatus { min-height:40px; padding:12px 0; }
 #updatesPane button { margin-top:14px; }
+
+/* Premium accessibility and compact layouts (without revealing private data). */
+.lens-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.lens-tab { min-width:0; white-space:normal; font-size:12px; line-height:1.25; min-height:50px; overflow-wrap:anywhere; }
+.lens-tab[aria-selected="true"] { outline:1px solid #98eadc; outline-offset:-2px; }
+[role="tabpanel"]:focus-visible { outline:2px solid #98eadc; outline-offset:3px; }
+.diagnostic-list { list-style:none; padding:0; margin:14px 0; }
+.diagnostic-row { display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid #34414d; padding:12px 0; font-size:14px; }
+.diagnostic-row strong { flex-shrink:0; font-size:13px; font-weight:600; color:#b0bcc9; }
+.diagnostic-row strong[data-ok="true"] { color:#98eadc; }
+.diagnostic-row strong[data-ok="false"] { color:#f0b6a6; }
+@media (max-width:340px) {
+  .private-content { padding:16px 10px; }
+  .lens-tabs { gap:3px; }
+  .lens-tab { padding:8px 5px; font-size:11px; }
+  .diagnostic-row { flex-wrap:wrap; }
+  #myid { font-size:32px; letter-spacing:3px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { scroll-behavior:auto !important; transition-duration:0.01ms !important; animation-duration:0.01ms !important; }
+}
