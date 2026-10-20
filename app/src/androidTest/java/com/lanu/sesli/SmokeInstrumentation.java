@@ -147,7 +147,7 @@ public class SmokeInstrumentation extends Instrumentation {
         if(LanuUpdater.matchesPinnedSigner(null,known)
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{},known)
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner,onlySigner},known)
-                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"0".repeat(64))
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},new String(new char[64]).replace('\0','0'))
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"invalid"))
             throw new AssertionError("Missing, altered or multiple installed signers accepted");
     }
