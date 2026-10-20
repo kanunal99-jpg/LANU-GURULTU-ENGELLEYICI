@@ -2,7 +2,7 @@
 
 Gerçek kamera ön yüzü: fotoğraf, ön/arka kamera, desteklenen cihazlarda flaş, 3/10 saniye zamanlayıcı, ızgara, dijital yakınlaştırma ve JPEG kaydetme. Android 8.0 ve üzeri.
 
-[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.6.apk**; SHA256SUMS.txt aynı sürümdedir.
+[Son APK sürümü ve indirme dosyaları](https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases). Özel depoda indirmek için GitHub hesabıyla giriş gerekir. Yeni paket adı **Lanu-Lens-2.0.7.apk**; SHA256SUMS.txt aynı sürümdedir.
 
 ## Kullanım
 
@@ -63,7 +63,7 @@ PIN ile özel alana gir → **Güncelleme Kontrol** → **Güncelleme denetle**.
 
 ### OTA dağıtımının tamamlanması için
 
-Kaynak kodları ve tüm kişisel verileri içeren **özel repo kesinlikle herkese açılmamalı**. Sadece APK + `latest.json` içeren, herkese okunabilir bir **LANU-LENS-OTA** dağıtım deposu kullanılır; dosya adı `Lanu-Lens-2.0.6.apk`, release etiketi `v2.0.6-buildN`; JSON şu şemada: `{"schema":1,"versionCode":N,"versionName":"2.0.6","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.6-buildN/Lanu-Lens-2.0.6.apk","sha256":"64-küçük-harf-hex","sizeBytes":123456}`.
+Kaynak kodları ve tüm kişisel verileri içeren **özel repo kesinlikle herkese açılmamalı**. Sadece APK + `latest.json` içeren, herkese okunabilir bir **LANU-LENS-OTA** dağıtım deposu kullanılır; dosya adı `Lanu-Lens-2.0.7.apk`, release etiketi `v2.0.7-buildN`; JSON şu şemada: `{"schema":1,"versionCode":N,"versionName":"2.0.7","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.7-buildN/Lanu-Lens-2.0.7.apk","sha256":"64-küçük-harf-hex","sizeBytes":123456}`.
 
 GitHub Actions, üretim anahtarı sağlandığında **yalnızca özel workflow artifact'ı** olarak `dist/latest.json` hazırlar; APK ve JSON'u halka açık ikili dağıtım reposuna göndermek henüz otomatik değildir. Bu adım için depo ve yetkili yayın mekanizması kurulmalı; yayınlanan JSON'daki APK URL'si gerçekten indirilebilir olmalıdır. Android'e gömülen URL, yeni APK üretildiği güncel kamuya açık `latest.json` adresi olmalıdır.
 
@@ -87,4 +87,13 @@ Her PIN girişinin ardından uygulama yalnızca özel alanda arka plandan sürü
 
 Kurulum için bilinmeyen uygulama kaynaklarına izin vermek gerekirse Android Ayarları açılır ve özel alan otomatik kilitlenir. İzin verip uygulamaya döndükten sonra PIN ile giriş yapıp **Güncelleme Kontrol** sekmesinde **Güncellemeyi kur** tuşuna bas: önceden doğrulanmış dosya korunur ve tekrar indirme zorunlu değildir. Android işlemi uygulamayı tamamen sonlandırmış veya cache'i silmişse indirmenin güvenle tekrarlanması gerekir.
 
-Yeni 2.0.6 debug test APK'sı da, daha önce yüklenmiş debug APK ile farklı imza kullanıyorsa sistem tarafından reddedilir. Henüz PIN/rehber/şifreli veri yoksa eski APK'yı kaldırıp yeni APK'yı kurabilirsin; bu eski görüşme kodunu/PIN'i sıfırlar. Sürekli yerinde OTA için kurulumda kalıcı **production** imza kullanılmalıdır.
+Yeni 2.0.7 debug test APK'sı da, daha önce yüklenmiş debug APK ile farklı imza kullanıyorsa sistem tarafından reddedilir. Henüz PIN/rehber/şifreli veri yoksa eski APK'yı kaldırıp yeni APK'yı kurabilirsin; bu eski görüşme kodunu/PIN'i sıfırlar. Sürekli yerinde OTA için kurulumda kalıcı **production** imza kullanılmalıdır.
+
+
+### OTA 2.0.7 güvenlik ve dayanıklılık
+
+Android APK, public APK dağıtım deposunun sabit `https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json` adresini artık varsayılan olarak bilir. Böylece kullanıcı hesabındaki public binary-only depo ve manifest **sonradan** kurulduğunda APK yalnızca sunucu adresini öğrenmek için yeni sürüm yüklemeyi gerektirmez. Depo henüz yoksa uygulama hatalı "güncel" demek yerine "yayın adresi henüz hazırlanmadı" mesajı gösterir.
+
+İndirilen APK, **kurulum tuşuna her basıldığında** yeniden SHA-256, boyut, Android paket adı, imza sertifikası ve artan versionCode kontrolünden geçer. Eski/geçersiz/bozuk APK kuruluma gönderilmez. Ayrı sürümlerin cache dosyaları birbirini bozmaz; bir indirme başarısız olursa doğrulanmış önceki APK silinmez. Android Ayarlar'dan izin verip PIN kilidini tekrar açtığında varsa indirilmiş paket yine kurulum öncesi doğrulanır.
+
+**Hâlâ bir kerelik hesap kurulumu gerekir:** public binary-only repo `LANU-LENS-OTA`; yedekli sabit Android keystore; GitHub Actions secrets `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD`, `LANU_OTA_PUBLISH_TOKEN`; variables `LANU_RELEASE_CERT_SHA256`, isteğe bağlı artık sabit `LANU_OTA_MANIFEST_URL`. Hazır repo, izinli yayın token'ı ve production keystore sağlanmadan kayıtsız/debug APK'dan veri kaybetmeden OTA garanti edilemez; kurulumdan sonra bir **sonraki** daha yüksek versionCode ile fiziksel telefonda yükseltme testi yapılmalıdır.
