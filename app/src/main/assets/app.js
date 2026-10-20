@@ -35,6 +35,7 @@
       for (const [id, values] of inboundAttempts) {
         if (!values.some(t => now - t < 60000)) inboundAttempts.delete(id);
       }
+      while (inboundAttempts.size > 128) inboundAttempts.delete(inboundAttempts.keys().next().value);
     }
     return true;
   }
