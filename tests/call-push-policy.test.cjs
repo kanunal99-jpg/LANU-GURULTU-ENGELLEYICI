@@ -50,3 +50,44 @@ test('failed external push transport retains authenticated inbox polling fallbac
  assert.equal(broker.takeInvites(bt).length,1);
  assert.equal(JSON.stringify(result).includes('credential'),false);
 });
+
+
+test('pairing cancelled during async invite acceptance can never trigger a stale push',async()=>{
+ const broker=new Broker(),caller=await Auth.generate(webcrypto),receiver=await Auth.generate(webcrypto);
+ await enroll(broker,caller);await enroll(broker,receiver);
+ const at=await token(broker,caller),bt=await token(broker,receiver);
+ const pair=broker.requestPairing(at,receiver.deviceId);
+ broker.approvePairing(bt,pair.requestId,caller.deviceId);
+ const underlying=broker.submitInvite.bind(broker);
+ broker.submitInvite=async(...args)=>{
+   const accepted=await underlying(...args);
+   broker.removePairing(at,receiver.deviceId);
+   return accepted;
+ };
+ let calls=0;
+ const result=await dispatchAuthenticatedCall({broker,sessionToken:at,
+   envelope:await Auth.signInvite(webcrypto,caller,receiver.deviceId),
+   send:async()=>{calls++;return true;}});
+ assert.deepEqual(result,{accepted:false,notified:false,delivery:'cancelled'});
+ assert.equal(calls,0);
+ assert.deepEqual(broker.takeInvites(bt),[]);
+});
+test('receiver revocation before push dispatch suppresses wakeup',async()=>{
+ const broker=new Broker(),caller=await Auth.generate(webcrypto),receiver=await Auth.generate(webcrypto);
+ await enroll(broker,caller);await enroll(broker,receiver);
+ const at=await token(broker,caller),bt=await token(broker,receiver);
+ const pair=broker.requestPairing(at,receiver.deviceId);
+ broker.approvePairing(bt,pair.requestId,caller.deviceId);
+ const original=broker.submitInvite.bind(broker);
+ broker.submitInvite=async(...args)=>{
+   const accepted=await original(...args);
+   broker.revoke(bt);
+   return accepted;
+ };
+ let count=0;
+ const result=await dispatchAuthenticatedCall({broker,sessionToken:at,
+   envelope:await Auth.signInvite(webcrypto,caller,receiver.deviceId),
+   send:async()=>{count++;return true;}});
+ assert.equal(result.delivery,'cancelled');
+ assert.equal(count,0);
+});
