@@ -26,6 +26,23 @@ if [[ ! "${expected_cert}" =~ ^[0-9a-f]{64}$ || "${actual_cert}" != "${expected_
   echo "::error::Android release signature does not match pinned fingerprint; refusing OTA publication"
   exit 1
 fi
+# Require exactly one signer: matching only Signer #1 is insufficient if the
+# binary carries another signer. Reject malformed or unsigned APKs early.
+signers="$(apksigner verify --print-certs "${OTA_APK}")"
+signer_count="$(printf '%s\n' "${signers}" | grep -Ec 'Signer #[0-9]+ certificate SHA-256 digest:' || true)"
+if [[ "${signer_count}" != "1" ]]; then
+  echo "::error::Expected exactly one Android signing certificate; refusing OTA publication"
+  exit 1
+fi
+# A filename/tag is untrusted; inspect the actual compiled APK identity.
+badging="$(aapt dump badging "${OTA_APK}")"
+pkg="$(printf '%s\n' "${badging}" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -1)"
+actual_code="$(printf '%s\n' "${badging}" | sed -n "s/^package: .*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -1)"
+actual_version="$(printf '%s\n' "${badging}" | sed -n "s/^package: .*versionName='\\([^']*\\)'.*/\\1/p" | head -1)"
+if [[ "${pkg}" != "com.lanu.sesli" || "${actual_code}" != "${GITHUB_RUN_NUMBER}" || "${actual_version}" != "${OTA_VERSION}" ]]; then
+  echo "::error::APK package, versionCode or versionName mismatch; refusing OTA publication"
+  exit 1
+fi
 # Fail closed on public manifest API outages or permission errors. Only a
 # genuine GitHub 404 can mean an uninitialized binary-only repository.
 workdir="$(mktemp -d)"
@@ -51,8 +68,15 @@ tag="v${OTA_VERSION}-build${GITHUB_RUN_NUMBER}"
 checksum="$(sha256sum "${OTA_APK}" | awk '{print $1}')"
 bytes="$(stat -c%s "${OTA_APK}")"
 [[ "${bytes}" -ge 1024 && "${bytes}" -le 167772160 ]] || exit 1
-if gh release view "${tag}" --repo "${repo}" >/dev/null 2>&1; then
+# Do not treat GitHub auth/rate-limit/5xx failure as a missing release tag.
+# Only an explicit tag 404 permits publication.
+if gh api "repos/${repo}/releases/tags/${tag}" > "${workdir}/tag.json" 2> "${workdir}/tag.err"; then
   echo "::error::Public tag already exists; do not silently replace a released APK"
+  exit 1
+elif grep -Eq 'HTTP 404|HTTP 404[)]|Not Found [(]HTTP 404[)]' "${workdir}/tag.err"; then
+  echo "::notice::Public release tag is available."
+else
+  echo "::error::Cannot verify public release tag (auth/network/API error); refusing publication."
   exit 1
 fi
 printf '%s  %s\n' "${checksum}" "${filename}" > "${workdir}/SHA256SUMS.txt"

@@ -14,12 +14,17 @@ if [[ "$1 $2" == "repo view" ]]; then echo PUBLIC; exit 0; fi
 if [[ "$1" == "api" && "$2" == *"contents/latest.json"* ]]; then
   echo "gh: \${MOCK_ERROR} (HTTP \${MOCK_CODE})" >&2; exit 1
 fi
-if [[ "$1 $2" == "release view" ]]; then exit 1; fi
+if [[ "$1" == "api" && "$2" == *"/releases/tags/"* ]]; then
+  echo "gh: tag lookup (HTTP \${MOCK_TAG_CODE:-404})" >&2; exit 1
+fi
 if [[ "$1 $2" == "release create" ]]; then exit 15; fi
 exit 1
 `,{mode:0o755});
     fs.writeFileSync(path.join(bin,'apksigner'),`#!/usr/bin/env bash
 echo 'Signer #1 certificate SHA-256 digest: ${'a'.repeat(64)}'
+`,{mode:0o755});
+    fs.writeFileSync(path.join(bin,'aapt'),`#!/usr/bin/env bash
+echo "package: name='com.lanu.sesli' versionCode='120' versionName='2.0.8'"
 `,{mode:0o755});
     const env={...process.env,PATH:bin+':'+process.env.PATH,GH_TOKEN:'mock-secret',
       GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',GITHUB_RUN_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.8',
@@ -36,6 +41,16 @@ echo 'Signer #1 certificate SHA-256 digest: ${'a'.repeat(64)}'
         assert.doesNotMatch(calls,/release create/,'HTTP '+code+' must never publish');
         assert.match(p.stdout+p.stderr,/Cannot verify previous public OTA manifest/);
       }
+    }
+    for(const tagCode of ['403','500']){
+      fs.writeFileSync(record,'');
+      const bad=cp.spawnSync('bash',['scripts/publish-ota.sh'],{
+        env:{...env,MOCK_CODE:'404',MOCK_ERROR:'Not Found',MOCK_TAG_CODE:tagCode},encoding:'utf8'
+      });
+      assert.notEqual(bad.status,0);
+      assert.match(bad.stdout+bad.stderr,/Cannot verify public release tag/);
+      assert.doesNotMatch(fs.readFileSync(record,'utf8'),/release create/,
+        'Tag lookup HTTP '+tagCode+' must never publish');
     }
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
