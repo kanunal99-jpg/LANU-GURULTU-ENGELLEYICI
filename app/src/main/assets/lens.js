@@ -9,6 +9,29 @@
   let allowIncoming=false,suspended=document.hidden;
   try{allowIncoming=localStorage.getItem('lens-listen')==='true'&&localStorage.getItem('lens-vault-v1')!==null;}catch(_){}
   const calls = () => window.LanuCalls;
+  function showPrivateTab(updates) {
+    if (!opened) return;
+    $('callsPane').hidden = updates;
+    $('updatesPane').hidden = !updates;
+    $('callsTab').classList.toggle('active', !updates);
+    $('updatesTab').classList.toggle('active', updates);
+    $('callsTab').setAttribute('aria-selected', String(!updates));
+    $('updatesTab').setAttribute('aria-selected', String(updates));
+    if (updates && window.LanuUpdate) {
+      window.LanuUpdate.info();
+      window.LanuUpdate.check();
+    }
+  }
+  window.lanuUpdateEvent = event => {
+    if (!opened || !event || typeof event.state !== 'string') return;
+    $('installedVersion').textContent = (event.version || 'bilinmiyor') + ' (kod ' + (event.versionCode || '?') + ')';
+    $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
+    $('downloadUpdate').hidden = event.state !== 'available';
+    $('installUpdate').hidden = event.state !== 'ready' && event.state !== 'permission' && event.state !== 'installing';
+    $('checkUpdates').disabled = event.state === 'checking' || event.state === 'downloading';
+    $('downloadUpdate').disabled = event.state === 'downloading';
+    $('installUpdate').disabled = event.state === 'installing';
+  };
   const storage = () => window.localStorage;
   function stopCamera() {
     captureEpoch++; clearTimeout(timer); timer = null; $('countdown').hidden = true;
@@ -106,6 +129,10 @@
     dismissKeyboard();gateEpoch++;opened=false;clearTimeout(idle);incomingPair=null;
     if(calls())calls().deactivate(listen&&allowIncoming&&!suspended); if(vault)vault.lock();
     $('privateView').hidden=$('gate').hidden=true;$('codeChangeConfirm').hidden=true;$('cameraView').hidden=false;
+    $('callsPane').hidden=false;$('updatesPane').hidden=true;
+    $('callsTab').classList.add('active');$('updatesTab').classList.remove('active');
+    $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');
+    $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();$('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
@@ -144,7 +171,7 @@
       if (!opened && $('gate').hidden && $('photoView').hidden && !suspended &&
           calls() && calls().state() === 'ringing') gate();
     },
-    callState(state){if(state!=='idle')stopCamera();if(opened&&state==='ringing'&&lastCallState!=='ringing')$('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});lastCallState=state;touch();},
+    callState(state){if(state!=='idle')stopCamera();if(opened&&state==='ringing'&&lastCallState!=='ringing'){showPrivateTab(false);$('answerBtn').scrollIntoView({block:'center',behavior:'smooth'});}lastCallState=state;touch();},
     pairStatus(text){if(opened)$('pairStatus').textContent=text;},
     paired,
     pairRequest(code,respond){
@@ -157,7 +184,7 @@
   window.lanuPhotoSaved=ok=>{$('savePhoto').disabled=false;$('photoStatus').textContent=ok?'Fotoğraf kaydedildi.':'Fotoğraf kaydedilmedi.';};
   window.lanuForeground=()=>{suspended=false;};
   window.lanuBackground=()=>{entries.forEach(entry=>entry.cancel());suspended=true;lock(false);};
-  window.lanuBack=()=>{if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
+  window.lanuBack=()=>{if(opened&&!$('updatesPane').hidden){showPrivateTab(false);return true;}if(opened||!$('gate').hidden){lock();return true;}if(!$('photoView').hidden){$('photoView').hidden=true;return true;}return false;};
   entries = Array.from(document.querySelectorAll('[data-lens-entry]')).map(element => LensEntry.attach(element, () => gate(), {
     enabled: () => !$('cameraView').hidden && $('gate').hidden && $('photoView').hidden && !document.hidden
   }));
@@ -174,6 +201,12 @@
     else{const link=document.createElement('a');link.href=photo;link.download='Lanu-Lens-'+Date.now()+'.jpg';link.click();$('photoStatus').textContent='Fotoğraf indirme isteği gönderildi.';}
   });
   $('pinForm').addEventListener('submit',submitPin);$('cancelGate').addEventListener('click',()=>{dismissKeyboard();gateEpoch++;$('gate').hidden=true;$('pinForm').reset();if(!opened&&vault)vault.lock();});
+  $('callsTab').addEventListener('click',()=>showPrivateTab(false));
+  $('updatesTab').addEventListener('click',()=>showPrivateTab(true));
+  $('checkUpdates').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.check();});
+  $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.download();});
+  $('installUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.install();});
+  $('updateReleases').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.releases();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
   $('changeCode').addEventListener('click',()=>{if(opened)$('codeChangeConfirm').hidden=false;});
   $('codeChangeCancel').addEventListener('click',()=>$('codeChangeConfirm').hidden=true);

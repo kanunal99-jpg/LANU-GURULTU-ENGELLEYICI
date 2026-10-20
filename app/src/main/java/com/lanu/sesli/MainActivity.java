@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private static final String OPEN_INCOMING = "com.lanu.sesli.OPEN_INCOMING";
     private static final int INCOMING_NOTIFICATION = 2901;
     private WebView web;
+    private LanuUpdater updater;
     private AudioManager audio;
     private PermissionRequest pendingMicrophone, pendingCamera;
     private Ringtone ringtone;
@@ -108,6 +109,7 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        updater = new LanuUpdater(this);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
         setupIncomingChannel();
         if (audio != null) audio.registerAudioDeviceCallback(devices, main);
@@ -131,6 +133,7 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
+        web.addJavascriptInterface(new UpdateBridge(), "LanuUpdate");
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView v, String url) {
                 if (HOME.equals(url)) openIncomingIfRequested();
@@ -188,6 +191,19 @@ public class MainActivity extends Activity {
         }
         if (code == BLUETOOTH) routeAudio();
         if (code == NOTIFY && incomingAlert && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) updateIncomingAlert(true);
+    }
+
+    /** Only the bundled local page can call this bridge. URLs are never taken from JavaScript. */
+    private final class UpdateBridge {
+        @JavascriptInterface public void info() { main.post(() -> { if (!destroyed && visible) updater.info(); }); }
+        @JavascriptInterface public void check() { main.post(() -> { if (!destroyed && visible) updater.check(); }); }
+        @JavascriptInterface public void download() { main.post(() -> { if (!destroyed && visible) updater.download(); }); }
+        @JavascriptInterface public void install() { main.post(() -> { if (!destroyed && visible) updater.install(); }); }
+        @JavascriptInterface public void releases() { main.post(() -> { if (!destroyed && visible) updater.releasePage(); }); }
+    }
+    void updateStatus(org.json.JSONObject data) {
+        if (web == null || destroyed || !visible) return;
+        web.evaluateJavascript("window.lanuUpdateEvent && window.lanuUpdateEvent(" + data.toString() + ")", null);
     }
 
     private final class AudioBridge {
@@ -436,6 +452,7 @@ public class MainActivity extends Activity {
         super.onResume(); visible = true;
         if (web != null) { web.onResume(); web.evaluateJavascript("window.lanuForeground && window.lanuForeground(); window.lanuResume && window.lanuResume()", null); }
         openIncomingIfRequested();
+        if (updater != null) updater.resumed();
     }
     @Override protected void onStop() {
         visible = false;
@@ -456,11 +473,12 @@ public class MainActivity extends Activity {
         updateIncomingAlert(false);
         ring(false); ringBack(false); setActive(false);
         files.shutdown(); photoBytes=null;
+        if (updater != null) updater.close();
         destroyed = true;
         if (pendingMicrophone != null) { pendingMicrophone.deny(); pendingMicrophone = null; }
         if (pendingCamera != null) { pendingCamera.deny(); pendingCamera = null; }
         if (audio != null) audio.unregisterAudioDeviceCallback(devices);
-        if (web != null) { web.removeJavascriptInterface("LanuAudio"); web.destroy(); web = null; }
+        if (web != null) { web.removeJavascriptInterface("LanuUpdate"); web.removeJavascriptInterface("LanuAudio"); web.destroy(); web = null; }
         main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
