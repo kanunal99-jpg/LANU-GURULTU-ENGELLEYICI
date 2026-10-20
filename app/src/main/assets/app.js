@@ -15,11 +15,28 @@
   function safeGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
   function safeSet(key, value) { try { localStorage.setItem(key, value); return localStorage.getItem(key) === value; } catch (_) { log('Settings storage unavailable'); return false; } }
   function newId() {
-    if (window.crypto && window.crypto.getRandomValues) {
-      const numbers = new Uint32Array(1); window.crypto.getRandomValues(numbers);
-      return String(100000 + (numbers[0] % 900000));
+    // Six-digit routing codes are NOT authentication. Never use weak PRNG.
+    if (!window.crypto || typeof window.crypto.getRandomValues !== 'function') return null;
+    const numbers = new Uint32Array(1), bound = Math.floor(0x100000000 / 900000) * 900000;
+    for (let i = 0; i < 8; i++) {
+      window.crypto.getRandomValues(numbers);
+      if (numbers[0] < bound) return String(100000 + (numbers[0] % 900000));
     }
-    return String(Math.floor(100000 + Math.random() * 900000));
+    return null;
+  }
+  const inboundAttempts = new Map();
+  function allowInbound(sender, kind) {
+    // Device-local spam defense; secure server auth/rate limits remain P0.
+    const now = Date.now(), key = kind + ':' + sender;
+    const recent = (inboundAttempts.get(key) || []).filter(t => now - t < 60000);
+    if (recent.length >= (kind === 'call' ? 4 : 3)) return false;
+    recent.push(now); inboundAttempts.set(key, recent);
+    if (inboundAttempts.size > 128) {
+      for (const [id, values] of inboundAttempts) {
+        if (!values.some(t => now - t < 60000)) inboundAttempts.delete(id);
+      }
+    }
+    return true;
   }
   function native(method, value) {
     try { if (window.LanuAudio && typeof window.LanuAudio[method] === 'function') window.LanuAudio[method](value); }
@@ -285,6 +302,7 @@
     if (navigator.onLine === false) { say('İnternet bağlantısı yok. Bağlanınca yeniden denenecek.'); return; }
     if (paused || !available()) { say('Uygulamaya dönüp yeniden bağlan.'); return; }
     if (typeof Peer === 'undefined') { say('Görüşme bileşeni açılamadı. Uygulamayı yeniden başlatın.'); return; }
+    if (!id || !/^[1-9][0-9]{5}$/.test(id)) { say('Güvenli görüşme kodu oluşturulamadı. Android System WebView bileşenini kontrol et.'); return; }
     const current = new Peer(PREFIX + id, {
       secure: true, debug: 0,
       config: {iceServers: [
@@ -331,6 +349,7 @@
       if (peer !== current || paused || !available() || state !== 'idle' || !/^lanu-sesli-[1-9]\d{5}$/.test(connection.peer)) {
         control(connection, 'busy'); connection.close(); return;
       }
+      if (!allowInbound(connection.peer,'call')) { connection.close(); return; }
       const token = ++epoch; state = 'ringing'; attach(connection, token);
       control(connection, 'ringing');
       deadline(token, 'Gelen arama zaman aşımına uğradı.'); ui(); say('Gelen arama: ' + connection.peer.slice(PREFIX.length));
@@ -386,6 +405,7 @@
   }
   function receivePair(channel) {
     if(!window.LanuLens || !window.LanuLens.isOpen() || paused || state!=='idle' || pairs.size || !/^lanu-sesli-[1-9]\d{5}$/.test(channel.peer)){channel.close();return;}
+    if (!allowInbound(channel.peer,'pair')) { channel.close(); return; }
     const session=pairSession(channel,true);let requested=false;
     channel.on('data',data=>{
       if(session.finished||requested||!data||data.type!=='request'||!/^[a-f0-9]{32}$/.test(data.nonce||'')){session.close();return;}
@@ -416,7 +436,7 @@
       }
       let next = newId();
       for (let attempts = 0; next === myId && attempts < 8; attempts++) next = newId();
-      if (next === myId) { say('Yeni kod oluşturulamadı. Tekrar dene.'); return false; }
+      if (!next || next === myId) { say('Güvenli yeni kod oluşturulamadı. Tekrar dene.'); return false; }
       // Explicit user action only: persist before retiring the old ID.
       // A storage failure must not silently change the displayed identity.
       if (!safeSet('lanuId', next)) { say('Kod kaydedilemedi. Telefon depolamasını kontrol et.'); return false; }
@@ -495,7 +515,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.'); else window.lanuResume(); });
   const storedId = safeGet('lanuId');
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
-  if (!/^[1-9]\d{5}$/.test(storedId || '')) safeSet('lanuId', myId);
+  if (myId && !/^[1-9][0-9]{5}$/.test(storedId || '')) safeSet('lanuId', myId);
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     say('Mikrofon desteği yok. Android System WebView bileşenini güncelleyin.'); ui();
   } else if (available()) start(myId);
