@@ -62,7 +62,9 @@ jobs:
           test -n "$APK"
           unzip -p "$APK" 'classes*.dex' > "$RUNNER_TEMP/release-classes.dex"
           for method in setPrivateUnlocked downloadAndInstall requestCallNotificationPermission setCallActive savePhoto; do
-            if ! strings "$RUNNER_TEMP/release-classes.dex" | grep -Fqx "$method"; then
+            # DEX encodes a ULEB128 length before each UTF-8 method name; for
+            # long names the prefix can be a printable ASCII character.
+            if ! strings "$RUNNER_TEMP/release-classes.dex" | grep -Fq "$method"; then
               echo "::error::R8 removed or renamed JS bridge method: $method"
               exit 1
             fi
