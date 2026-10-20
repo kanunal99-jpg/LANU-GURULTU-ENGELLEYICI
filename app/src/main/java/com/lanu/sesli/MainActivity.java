@@ -135,6 +135,11 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new AudioBridge(), "LanuAudio");
         web.addJavascriptInterface(new UpdateBridge(), "LanuUpdate");
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap favicon) {
+                // A new document must never inherit native PIN authorization
+                // from an earlier page (including local asset navigations).
+                privateUnlocked = false;
+            }
             @Override public void onPageFinished(WebView v, String url) {
                 if (HOME.equals(url)) openIncomingIfRequested();
             }
