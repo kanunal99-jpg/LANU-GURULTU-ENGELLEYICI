@@ -33,6 +33,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Arama yaşam döngüsü testleri
         run: node --test tests/*.test.cjs
+      - name: OTA yayıncısı sözdizimi
+        run: bash -n scripts/publish-ota.sh
       - name: Yerel PeerJS bütünlüğü
         run: echo 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5  app/src/main/assets/vendor/peerjs.min.js' | sha256sum -c -
       - name: İki istemci WebRTC ses bağlantısı
@@ -91,25 +93,39 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Production signing secrets missing: publishing a debug-signed prerelease, NOT OTA-compatible."
           fi
+      - name: OTA imzalama koşulları
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          PUBLIC_TOKEN: ${{ secrets.LANU_OTA_PUBLISH_TOKEN }}
+          PINNED_CERT: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
+          OTA_FEED: ${{ vars.LANU_OTA_MANIFEST_URL }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          if [[ -n "$PUBLIC_TOKEN" ]]; then
+            if [[ "$SIGNED" != "true" || -z "$PINNED_CERT" || -z "$OTA_FEED" ]]; then
+              echo "::error::OTA publishing requires a stable release signing key, pinned certificate and a public feed."
+              exit 1
+            fi
+          fi
       - name: APK imzası ve içerik doğrulaması
         run: |
           mkdir -p dist
           if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
             gradle assembleRelease --no-daemon
-            cp app/build/outputs/apk/release/app-release.apk dist/Lanu-Lens-2.0.4.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/Lanu-Lens-2.0.5.apk
           else
-            cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.4.apk
+            cp app/build/outputs/apk/debug/app-debug.apk dist/Lanu-Lens-2.0.5.apk
           fi
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.4.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.4.apk > dist/APK-BILGILERI.txt
-          unzip -l dist/Lanu-Lens-2.0.4.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Lanu-Lens-2.0.5.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Lanu-Lens-2.0.5.apk > dist/APK-BILGILERI.txt
+          unzip -l dist/Lanu-Lens-2.0.5.apk | grep -E 'assets/(index.html|app.js|vendor/peerjs.min.js)'
           cd dist
-          sha256sum Lanu-Lens-2.0.4.apk > SHA256SUMS.txt
+          sha256sum Lanu-Lens-2.0.5.apk > SHA256SUMS.txt
           if [[ "${{ steps.signing.outputs.signed }}" == "true" ]]; then
-            HASH="$(sha256sum Lanu-Lens-2.0.4.apk | cut -d' ' -f1)"
-            SIZE="$(stat -c%s Lanu-Lens-2.0.4.apk)"
+            HASH="$(sha256sum Lanu-Lens-2.0.5.apk | cut -d' ' -f1)"
+            SIZE="$(stat -c%s Lanu-Lens-2.0.5.apk)"
             cat > latest.json <<EOF
-          {"schema":1,"versionCode":${GITHUB_RUN_NUMBER},"versionName":"2.0.4","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.4-build${GITHUB_RUN_NUMBER}/Lanu-Lens-2.0.4.apk","sha256":"${HASH}","sizeBytes":${SIZE}}
+          {"schema":1,"versionCode":${GITHUB_RUN_NUMBER},"versionName":"2.0.5","apkUrl":"https://github.com/kanunal99-jpg/LANU-LENS-OTA/releases/download/v2.0.5-build${GITHUB_RUN_NUMBER}/Lanu-Lens-2.0.5.apk","sha256":"${HASH}","sizeBytes":${SIZE}}
           EOF
             echo "latest.json prepared as an artifact. Publish APK + manifest to a separate PUBLIC binary-only distribution repository before activating OTA."
           fi
@@ -128,6 +144,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v2.0.4-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.4.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
+          gh release create "v2.0.5-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.5.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Lanu Lens 2.0.4" --notes-file docs/RELEASE-NOTES.md
+            --title "Lanu Lens 2.0.5" --notes-file docs/RELEASE-NOTES.md
+      - name: OTA herkese açık sadece-APK dağıtımı
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signing.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.LANU_OTA_PUBLISH_TOKEN }}
+          OTA_APK: dist/Lanu-Lens-2.0.5.apk
+          OTA_VERSION: "2.0.5"
+          LANU_RELEASE_CERT_SHA256: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::notice::Public distribution token missing: private release built, OTA remains unconfigured."
+            exit 0
+          fi
+          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          bash scripts/publish-ota.sh
