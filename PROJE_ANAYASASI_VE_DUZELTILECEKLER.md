@@ -130,3 +130,41 @@ Bu puanlar kaynak kodu, birleştirilmiş PR'lar, geçmiş CI/Release ve kapatıl
 ### Bu çalışmanın sonraki kontrollü kod adımı
 - **P0 güvenlik sınırı:** Asenkron vault şifreleme devam ederken PIN kilitlenir veya başka yazma işlemi başlarsa eski şifreleme sonucunun kilitten sonra yazılmasını engelle; eşzamanlı PIN değişimi / kilit / yazma ve hata durumları için regresyon testi ekle.
 - Onay kapısı: kaynak değişikliği + testler + PR CI; ana dal ve yeni APK yalnız CI başarılı olduktan sonra. Debug anahtarı ile veri kayıpsız üretim OTA iddiası yok.
+
+---
+
+## 20.10.2026 — Kimlik ve OTA 14/15 hedef teslim anayasası
+
+**Bütçe/kanıt kuralı:** 13 veya 14/15 puanı **üretim kabul puanıdır**; PR veya yalnızca başarılı CI, hesap/backend/gerçek Android doğrulamasının yerine geçmez. Kaynak kodu hazırlığı ayrı not edilir. Mevcut baz puanlar: kimlik+arka plan çağrısı **2/15**; OTA+üretim dağıtımı **5/15**. Üretim hedefi her biri **14/15**. Her kalem, kanıtı görülünce ilerletilir.
+
+### Bu oturumun gerçek kod işleri
+- **Kimlik PR #38 — CI/merge bekleniyor:** 6 haneli PeerJS yönlendirme kodunda CSPRNG dışı `Math.random` kaldırıldı; modulo yanlılığı reddedildi; kriptografi yoksa kod üretimi fail-closed. 60 saniyelik istemci çağrı/eşleştirme sınırları ve 128 girdilik bellek limiti eklendi. Altı haneli kod **asla güvenilir kimlik değildir**.
+- **Kimlik PR #38 — protokol taslağı:** nonextractable ECDSA P-256 `CryptoKey` oluşturma ve kalıcı depolama arabirimi, çağrı başına iki rastgele 128-bit belirteç, kısa TTL, imzalı tekil davet, hedef ve gönderen açık anahtarı fingerprint denetimi, bounded anti-replay cache ve negatif testler. Protokol henüz canlı PeerJS görüşmesine bağlanmadı; **sunucu yetkisi, cihaz kaydı/iptali ve PIN sonrası trust store** yok.
+- **OTA PR #37 — CI/merge bekleniyor:** tam sabit public `latest.json` adresi, manifest `versionName` + `versionCode` ile eşleşen release tag'i, indirilen APK gerçek `versionName` doğrulaması, konfigüre edildiğinde hem kurulu hem indirilen APK'yı bağlayan SHA-256 sertifika fingerprint kontrolü. İzin/güvenli kurulum, hash ve aynı imzacı şartı korunuyor.
+- **Önceki P0 PR #36** emülatör/Node/Android CI'dan başarılı geçti ve `main` dalına birleştirildi. Bu değişiklik PIN kasasındaki gecikmiş veri işlemlerini iptal eder.
+
+### Kimlik/çağrı üretim kabul kapıları — 14/15
+| Kontrol | Kabul kanıtı | Durum |
+|---|---|---|
+| Cihaz anahtarları | Android cihaz başına nonextractable/imkân varsa Keystore'da donanım destekli anahtar, kalıcı ve PIN korumalı kimlik; key-loss/revoke testleri | Açık |
+| Yetkili sunucu | TLS üstünde cihaz kayıt/kimlik, imzalı nonce challenge, hedefe yönelik yetkili callId, TTL, tekrar saldırısı reddi, rate-limit ve audit (PII'siz) | Açık |
+| Güvenli rehber eşleştirmesi | Kısa kod yalnız yönlendirme; açık anahtar fingerprint veya QR ile kullanıcı onayı; sahte PeerJS bağlantısı ve taklitçi kimlik reddi | Açık |
+| Yetki iptali/anahtar çevrimi | Cihaz iptali, yeni cihaz devri, kimlik kaybı ve geri alma testleri; sessiz kimlik yeniden oluşturma yok | Açık |
+| FCM+gerçek E2E | Kısa ömürlü, kod/PIN içermeyen push; iki fiziksel Android'de kilit/Doze/farklı ağ, cihaz PIN'i, çağrı iptal/red ve mikrofon kontrolü | Açık |
+| Test/prod izleme | Negatif replay/expiry/unauthorized tests + üretim broker erişimi, hata oranı/sürüm kanıtı | Açık |
+
+### OTA üretim kabul kapıları — 14/15
+| Kontrol | Kabul kanıtı | Durum |
+|---|---|---|
+| Kalıcı production signing | Kullanıcı kontrolünde korunmuş ve **yedekli** aynı `.jks`; PIN/parola kaynak kodda değil. Sonraki her sürümde aynı sertifika | Açık |
+| Güvenli CI | Repo-scoped GitHub Secrets: `LANU_RELEASE_KEYSTORE_B64`, `LANU_RELEASE_STORE_PASSWORD`, `LANU_RELEASE_KEY_ALIAS`, `LANU_RELEASE_KEY_PASSWORD`; SHA-256 fingerprint var + release fail-closed | Açık |
+| Binary-only public OTA | Ayrı `kanunal99-jpg/LANU-LENS-OTA` public repo; release yalnız imzalı APK, SHA; checksum doğrulandıktan sonra atomic `latest.json` yayımlanır. Kaynak depo private | Açık |
+| Yayın güvenlik testleri | Bozuk manifest, sahte sertifika, yanlış APK paketi/sürümü, alt sürüm, yanlış yönlendirme, 404/403/500/ağ kopması, iptal ve erişim reddi | Kısmen CI; üretim açık |
+| Üstüne kurulum / veri | Aynı key ile artan 2 sürüm; **iki gerçek cihazda** önce/sonra PIN, kimlik kodu, şifreli rehber checksum ve kurulum kanıtı. Debug→production imza uyuşmazlığında kaldırma/uygulama verisi kaybı kabul edilmez | Açık |
+| Operasyon/geri dönüş | Keystore kurtarma, key fingerprint kayıt, scoped publisher rollback önleme, imzalı ileri düzeltme ve dokümante edilmiş yayın onayı | Açık |
+
+### 13–14 puanını almak için değişmez kural
+- **Kod hazır**: CI ve Android emülatör smoke başarılı + tamlanan kod yolları.
+- **13/15**: yukarıdaki üretim zorunlulukları büyük ölçüde kanıtlı, kalan risk düşük ve tanımlı.
+- **14/15**: bütün P0 kabul kapıları kapanmış, iki gerçek cihaz/yayın kanıtı ve geri dönüş tatbikatı var.
+- Harici hesap/repo/anahtar kurmadan **sahte tamamlandı** yok. Debug APK imzalı sürümün üzerine veri kayıpsız production OTA vaadi yok.
