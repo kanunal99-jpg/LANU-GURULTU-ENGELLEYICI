@@ -200,8 +200,15 @@ jobs:
           # Private source repo release MUST expose all 4 binary/evidence assets.
           verified=false
           for attempt in 1 2 3 4 5; do
+            mkdir -p "$RUNNER_TEMP/lanu-release-readback"
             if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v2.0.10-build${GITHUB_RUN_NUMBER}" > "$RUNNER_TEMP/lanu-release.json" &&
-               node scripts/verify-release-evidence.cjs "$RUNNER_TEMP/lanu-release.json" dist "$GITHUB_SHA"; then
+               node scripts/verify-release-evidence.cjs "$RUNNER_TEMP/lanu-release.json" dist "$GITHUB_SHA" &&
+               gh release download "v2.0.10-build${GITHUB_RUN_NUMBER}" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/lanu-release-readback" --clobber &&
+               cmp dist/Lanu-Lens-2.0.10.apk "$RUNNER_TEMP/lanu-release-readback/Lanu-Lens-2.0.10.apk" &&
+               cmp dist/SHA256SUMS.txt "$RUNNER_TEMP/lanu-release-readback/SHA256SUMS.txt" &&
+               cmp dist/APK-BILGILERI.txt "$RUNNER_TEMP/lanu-release-readback/APK-BILGILERI.txt" &&
+               cmp dist/APK-IMZA-DURUMU.txt "$RUNNER_TEMP/lanu-release-readback/APK-IMZA-DURUMU.txt"; then
+              (cd "$RUNNER_TEMP/lanu-release-readback" && sha256sum -c SHA256SUMS.txt)
               verified=true
               break
             fi
