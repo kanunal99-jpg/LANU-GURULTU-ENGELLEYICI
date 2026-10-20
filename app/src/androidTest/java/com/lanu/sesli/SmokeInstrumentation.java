@@ -38,6 +38,9 @@ public class SmokeInstrumentation extends Instrumentation {
             if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
             verifyOtaDigestRejectsTampering(target);
             assertUpdaterGate(target, false, "Locked camera must block native OTA");
+            // Debug builds never claim real OTA even when a public feed exists.
+            if (BuildConfig.DEBUG && new LanuUpdater(target).productionOtaConfigured())
+                throw new AssertionError("Debug-signed APK must not enable production OTA");
             require(web, "location.origin === 'https://appassets.androidplatform.net'", "Secure asset origin");
             require(web, "!!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function'", "Microphone API available");
             require(web, "typeof window.LanuAudio.setCallActive === 'function'", "Trusted native bridge");
