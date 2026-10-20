@@ -211,7 +211,18 @@ public class SmokeInstrumentation extends Instrumentation {
         long probe=SystemClock.uptimeMillis();
         pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(50);
         pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
-        JSONArray observed=new JSONArray(js(web,"(()=>{const t=window.__entryTrace.find(e=>e.type==='touchstart');return t&&t.touches?t.touches[0]:null;})()"));
+        // Chrome 74 can expose native POINTER events without a touchstart.
+        // Calibrate against whichever real OS event actually reached WebView;
+        // never continue on null or manufacture a DOM touch.
+        String observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
+                +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
+                +"if(t)return t.touches[0];"
+                +"const p=events.find(e=>e.type==='pointerdown');return p?[p.x,p.y]:null;})()");
+        if(observedJson==null || "null".equals(observedJson))
+            throw new AssertionError("Real Android touch calibration failed: "
+                    + js(web,"JSON.stringify({focus:document.hasFocus(),trace:window.__entryTrace,"
+                    +"target:window.__entryTarget,viewport:[innerWidth,innerHeight]})"));
+        JSONArray observed=new JSONArray(observedJson);
         point[0]+=(bounds.optDouble(0)-observed.optDouble(0))*point[2];
         point[1]+=(bounds.optDouble(1)-observed.optDouble(1))*point[2];
         js(web,"window.__entryTrace=[]");
