@@ -35,7 +35,11 @@ public class SmokeInstrumentation extends Instrumentation {
                 if (loaded) break;
                 Thread.sleep(200);
             }
-            if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
+            if (!loaded) throw new AssertionError("Bundled JavaScript did not start: "
+                + js(web,"JSON.stringify({ready:document.readyState,url:location.href,peer:typeof Peer,"
+                + "pause:typeof window.lanuPause,lens:typeof window.LanuLens,"
+                + "crypto:typeof window.crypto,agent:navigator.userAgent,"
+                + "scripts:Array.from(document.scripts).map(s=>[s.src,s.readyState])})"));
             verifyOtaDigestRejectsTampering(target);
             verifyPinnedSignerFailClosed();
             assertUpdaterGate(target, false, "Locked camera must block native OTA");
