@@ -621,7 +621,7 @@ test('routing code generation fails closed without cryptographic randomness',()=
  assert.equal(h.peers.length,0);
  assert.match(h.get('status').textContent,/Güvenli görüşme kodu/);
  assert.equal(h.context.localStorage.getItem('lanuId'),undefined);
- assert.doesNotMatch(source,/Math\\.random\\s*\\(/);
+ assert.equal(source.includes('Math.random('),false);
 });
 test('routing code uses rejection sampling rather than biased modulo',()=>{
  const h=harness({lens:true});h.open();let calls=0;
