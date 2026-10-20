@@ -43,7 +43,7 @@ function harness(options = {}) {
   const storage = options.storage || new Map([['lanuId', '123456']]);
   const context = {document, navigator: {onLine: options.online !== false, mediaDevices: media},
     localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)},
-    Peer, Uint32Array, console: {warn() {}}, Math, Promise,
+    Peer, Uint32Array, crypto:options.crypto, console: {warn() {}}, Math, Promise,
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timers.delete(id); },
     addEventListener(event, fn) { events[event] = fn; },
@@ -251,7 +251,7 @@ test('a failed storage write never changes the active identity', () => {
 });
 test('invalid stored ID is replaced and persisted even when the initial connection is offline', () => {
   const storage = new Map([['lanuId', 'bad']]);
-  const h = harness({storage,online:false});
+  const h = harness({storage,online:false,crypto:{getRandomValues(a){a[0]=500000;return a;}}});
   const id = storage.get('lanuId');
   assert.match(id, /^[1-9]\d{5}$/);
   assert.equal(h.peers.length, 0);
@@ -259,7 +259,7 @@ test('invalid stored ID is replaced and persisted even when the initial connecti
   assert.equal(h.peers[0].id, 'lanu-sesli-' + id);
 });
 test('invalid persisted ID is replaced', () => {
-  const storage = new Map([['lanuId','bad']]),h = harness({storage}); h.open();
+  const storage = new Map([['lanuId','bad']]),h = harness({storage,crypto:{getRandomValues(a){a[0]=500000;return a;}}}); h.open();
   assert.match(h.get('myid').textContent, /^[1-9]\d{5}$/);
   assert.equal(storage.get('lanuId'), h.get('myid').textContent);
 });
@@ -613,4 +613,45 @@ test('incoming notification uses a protected Android channel and never includes 
   assert.match(java,/checkSelfPermission\(Manifest\.permission\.POST_NOTIFICATIONS\)/);
   assert.match(html,/id="notificationPermission"/);
   assert.doesNotMatch(java,/setContentTitle\([^\n]*\.peer\b/);
+});
+
+
+test('routing code generation fails closed without cryptographic randomness',()=>{
+ const h=harness({storage:new Map()});
+ assert.equal(h.peers.length,0);
+ assert.match(h.get('status').textContent,/Güvenli görüşme kodu/);
+ assert.equal(h.context.localStorage.getItem('lanuId'),undefined);
+ assert.equal(source.includes('Math.random('),false);
+});
+test('routing code uses rejection sampling rather than biased modulo',()=>{
+ const h=harness({lens:true});h.open();let calls=0;
+ h.context.crypto={getRandomValues(values){values[0]=++calls===1 ? 4294967295 : 500000;return values;}};
+ assert.equal(h.context.LanuCalls.rotateCode(),true);
+ assert.equal(calls,2);
+ assert.equal(h.get('myid').textContent,'600000');
+});
+test('repeated spoofable incoming peer ID is throttled without opening microphone',()=>{
+ const h=harness();h.open();
+ for(let n=0;n<4;n++){
+  const incoming=new h.Connection();
+  h.peers[0].emit('call',incoming);
+  assert.equal(h.get('answerBtn').hidden,false);
+  h.click('hangBtn');
+ }
+ const fifth=new h.Connection();h.peers[0].emit('call',fifth);
+ assert.ok(fifth.closed>0);
+ assert.equal(h.requested(),0);
+ assert.equal(h.context.LanuCalls.state(),'idle');
+});
+test('pairing spam attempts from same six-digit code are throttled',()=>{
+ const h=harness({lens:true});h.open();
+ for(let n=0;n<3;n++){
+  const channel=new h.Connection();channel.label='lanu-pair-v1';
+  h.peers[0].emit('connection',channel);
+  assert.equal(channel.closed,0);
+  channel.close();
+ }
+ const fourth=new h.Connection();fourth.label='lanu-pair-v1';
+ h.peers[0].emit('connection',fourth);
+ assert.ok(fourth.closed>0);
 });
