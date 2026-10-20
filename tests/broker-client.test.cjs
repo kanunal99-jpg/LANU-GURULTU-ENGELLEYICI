@@ -109,3 +109,19 @@ test('bundled broker client is parseable by Android 10 Chrome 74',()=>{
  assert.ok(source.includes('typeof fetchApi'));
  assert.ok(source.includes('identity.privateKey.extractable'));
 });
+
+
+test('signed 15-minute bearer token is never sent after its local expiry',async()=>{
+ let now=Date.now();
+ const identity=await Auth.generate(webcrypto);
+ const broker=new Broker({clock:()=>now}),mock=service(broker);
+ const client=Client.create({...options(identity,mock.api),clock:()=>now});
+ await client.enroll(identity);
+ await client.signIn();
+ assert.deepEqual(await client.pendingCalls(),[]);
+ const count=mock.calls.length;
+ now+=900000;
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+ assert.equal(mock.calls.length,count,'expired bearer must not cross network boundary');
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
