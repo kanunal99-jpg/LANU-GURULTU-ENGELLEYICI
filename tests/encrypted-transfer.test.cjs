@@ -107,3 +107,24 @@ test('Android SAF backup bridge is PIN-gated, limited and uses system document p
  assert.ok(lens.includes('window.location.reload()'));
  assert.ok(lens.includes('window.lanuBackupLoaded'));
 });
+
+
+test('backup encryption is independently decrypted and PIN-verified before saving',async()=>{
+ const db=await prepared();
+ const encrypted=await transfer.exportBackup({storage:db,crypto:webcrypto,pin:'741963',passphrase});
+ assert.equal(await transfer.verifyBackup({crypto:webcrypto,pin:'741963',passphrase,serialized:encrypted}),true);
+ await assert.rejects(()=>transfer.verifyBackup({crypto:webcrypto,pin:'000000',passphrase,serialized:encrypted}));
+ await assert.rejects(()=>transfer.verifyBackup({crypto:webcrypto,pin:'741963',passphrase:'another passphrase 1234',serialized:encrypted}));
+ const parsed=JSON.parse(encrypted);
+ parsed.ciphertext=parsed.ciphertext.replace(/^./,parsed.ciphertext.startsWith('A')?'B':'A');
+ await assert.rejects(()=>transfer.verifyBackup({crypto:webcrypto,pin:'741963',passphrase,serialized:JSON.stringify(parsed)}));
+});
+test('backup export UI requires matching passphrases and encrypted round-trip verification',()=>{
+ const fs=require('node:fs');
+ const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
+ const js=fs.readFileSync('app/src/main/assets/lens.js','utf8');
+ assert.ok(html.includes('id="exportPassphraseConfirm"'));
+ assert.ok(js.includes("passphrase!==confirmed || passphrase.length<12"));
+ assert.ok(js.includes("window.LanuEncryptedTransfer.verifyBackup"));
+ assert.ok(js.includes("if(!verified || !opened || token!==gateEpoch"));
+});

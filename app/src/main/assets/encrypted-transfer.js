@@ -85,7 +85,21 @@
     }
     return {contactsRestored:true,routingIdRestored:data.routingId!==null};
   }
-  const api=Object.freeze({exportBackup,importBackup});
+  // Independently decrypt the just-created file and verify that the old PIN
+  // works before asking Android to save it. This does NOT claim the SAF
+  // provider actually persisted bytes; it only validates the encrypted file.
+  async function verifyBackup({crypto,pin,passphrase,serialized}){
+    const ephemeral=new Map(),internal={
+      getItem:k=>ephemeral.has(k)?ephemeral.get(k):null,
+      setItem:(k,v)=>ephemeral.set(k,v),
+      removeItem:k=>ephemeral.delete(k)
+    };
+    try{
+      await importBackup({storage:internal,crypto,pin,passphrase,serialized});
+      return ephemeral.has(ROOT);
+    }finally{ephemeral.clear();}
+  }
+  const api=Object.freeze({exportBackup,importBackup,verifyBackup});
   root.LanuEncryptedTransfer=api;
   if(typeof module!=='undefined')module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
