@@ -64,3 +64,11 @@ echo "Signer #1 certificate SHA-256 digest: $(printf 'a%.0s' $(seq 1 64))"
     assert.doesNotMatch(fs.readFileSync(logfile,'utf8'),/release create/);
   }finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('CI refuses partial production signing or partially configured publisher',()=>{
+  assert.match(workflow,/Incomplete release signing configuration; refusing a debug-signed fallback/);
+  assert.match(workflow,/configured=0/);
+  assert.match(workflow,/configured.*-gt 0.*configured.*-lt 4/);
+  assert.match(workflow,/Production OTA is only allowed with all signing secrets/);
+  assert.match(workflow,/\$SIGNED.*== "true".*\$PUBLIC_TOKEN/);
+});
