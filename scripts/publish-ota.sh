@@ -81,13 +81,16 @@ else
 fi
 printf '%s  %s\n' "${checksum}" "${filename}" > "${workdir}/SHA256SUMS.txt"
 gh release create "${tag}" "${OTA_APK}" "${workdir}/SHA256SUMS.txt" \
-  --repo "${repo}" --title "Lanu Lens ${OTA_VERSION}" \
+  --repo "${repo}" --title "Lanu Lens ${OTA_VERSION}" --draft \
   --notes "Android imzası doğrulanmış LANU Lens OTA paketi. Kurulum için kullanıcı onayı gerekir."
 # Download back through the PUBLIC release and compare bytes before updating
 # latest.json: consumers never see a manifest pointing to a missing/bad APK.
 mkdir -p "${workdir}/verify"
 gh release download "${tag}" --repo "${repo}" --pattern "${filename}" --dir "${workdir}/verify"
 printf '%s  %s\n' "${checksum}" "${workdir}/verify/${filename}" | sha256sum -c -
+# The public binary remains a draft until remote readback succeeds.
+# Only after promotion may latest.json point consumers to this APK.
+gh release edit "${tag}" --repo "${repo}" --draft=false
 url="https://github.com/${repo}/releases/download/${tag}/${filename}"
 jq -cn \
   --argjson schema 1 \
