@@ -217,7 +217,7 @@ jobs:
             sleep "$((attempt * 3))"
           done
           if [[ "$verified" != true ]]; then
-            echo "::error::Release APK and signing evidence could not be verified"
+            echo "::error::Release APK and signing evidence could not be verified; release remains a non-public draft"
             exit 1
           fi
       - name: Doğrulanmış APK Release yayınını aç
@@ -226,6 +226,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Keep the release invisible until remote asset readback and SHA-256 pass.
+          # A debug-signed APK is always labeled as a non-production prerelease.
           gh release edit "v2.0.10-build${GITHUB_RUN_NUMBER}" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
 
       - name: OTA herkese açık sadece-APK dağıtımı
