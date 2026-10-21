@@ -190,7 +190,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v2.0.10-build${GITHUB_RUN_NUMBER}" dist/Lanu-Lens-2.0.10.apk dist/SHA256SUMS.txt dist/APK-BILGILERI.txt dist/APK-IMZA-DURUMU.txt \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease \
             --title "Lanu Lens 2.0.10" --notes-file docs/RELEASE-NOTES.md
       - name: GitHub Release APK'yi uzaktan kanıtla
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -220,6 +220,14 @@ jobs:
             echo "::error::Release APK and signing evidence could not be verified"
             exit 1
           fi
+      - name: Doğrulanmış APK Release yayınını aç
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Keep the release invisible until remote asset readback and SHA-256 pass.
+          gh release edit "v2.0.10-build${GITHUB_RUN_NUMBER}" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+
       - name: OTA herkese açık sadece-APK dağıtımı
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signing.outputs.signed == 'true'
         env:
