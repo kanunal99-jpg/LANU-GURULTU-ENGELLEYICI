@@ -32,13 +32,13 @@ final class LanuUpdater {
     private static final long MAX_APK = 160L * 1024 * 1024;
     private static final int MAX_MANIFEST = 8192;
     private static final String OTA_REPO_PATH = "/kanunal99-jpg/LANU-LENS-OTA/releases/download/";
-    private static final String RELEASE_PAGE =
-            "https://github.com/kanunal99-jpg/LANU-GURULTU-ENGELLEYICI/releases";
     private final Activity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
-    private boolean busy, awaitingInstallPermission;
-    private volatile boolean destroyed;
+    private boolean busy, downloading, awaitingInstallPermission;
+    private int downloadProgress;
+    private volatile boolean destroyed, cancelRequested;
+    private volatile HttpsURLConnection activeDownloadConnection;
     private Candidate latest;
     private File verified;
 
@@ -75,7 +75,12 @@ final class LanuUpdater {
             j.put("version",installedVersion());
             j.put("versionCode",installedCode());
             j.put("configured",productionOtaConfigured());
-            if(latest!=null)j.put("availableVersion",latest.version);
+            if(latest!=null && latest.code>installedCode()) {
+                j.put("availableVersion",latest.version);
+                j.put("availableVersionCode",latest.code);
+            }
+            if("downloading".equals(state) || "cancelling".equals(state))
+                j.put("progressPercent",downloadProgress);
         }catch(Exception ignored){}
         if (activity instanceof MainActivity) ((MainActivity)activity).updateStatus(j);
     }
@@ -194,6 +199,13 @@ final class LanuUpdater {
     }
     void download(){download(false);}
     void downloadAndInstall(){download(true);}
+    void cancelDownload() {
+        if(!busy || !downloading) return;
+        cancelRequested = true;
+        emit("cancelling","İndirme iptal ediliyor; yarım APK silinecek…");
+        HttpsURLConnection current = activeDownloadConnection;
+        if(current != null) current.disconnect();
+    }
     private void download(boolean installAfterVerification){
         if(!productionOtaConfigured()) {
             emit("not_configured","Güvenli OTA yalnız doğrulanmış üretim APKsında kullanılabilir.");
@@ -207,7 +219,8 @@ final class LanuUpdater {
             if(installAfterVerification)install();
             return;
         }
-        busy=true;emit("downloading","Güncelleme APK'sı indiriliyor ve doğrulanıyor…");
+        busy=true;downloading=true;cancelRequested=false;downloadProgress=0;
+        emit("downloading","Güncelleme APK'sı indiriliyor ve doğrulanıyor…");
         io.execute(()->{
             // Cache paths are bound to the target build. An interrupted
             // download of a newer build must not erase the older verified APK.
@@ -215,6 +228,7 @@ final class LanuUpdater {
             File tmp=new File(dest.getParentFile(),"download-"+next.code+".tmp");
             String error=null;
             try {
+                if(cancelRequested)throw new java.io.InterruptedIOException("Cancelled update");
                 if(!dest.getParentFile().exists()&&!dest.getParentFile().mkdirs())throw new IllegalStateException("Cannot create cache");
                 if(tmp.exists()&&!tmp.delete())throw new IllegalStateException("Cannot clean temp");
                 MessageDigest digest=MessageDigest.getInstance("SHA-256");
@@ -223,35 +237,47 @@ final class LanuUpdater {
                 try(InputStream input=openApk(next.url);FileOutputStream out=new FileOutputStream(tmp)){
                     byte[] buffer=new byte[32768];int n;
                     while((n=input.read(buffer))!=-1){
-                        if(Thread.currentThread().isInterrupted())throw new java.io.InterruptedIOException("Cancelled update");
+                        if(cancelRequested || Thread.currentThread().isInterrupted())throw new java.io.InterruptedIOException("Cancelled update");
                         if(total+n>MAX_APK||total+n>next.size)throw new IllegalArgumentException("Unexpected APK length");
                         digest.update(buffer,0,n);out.write(buffer,0,n);total+=n;
                         int percent=(int)((total*100)/next.size);
                         if(percent>=lastPercent+10 && percent<100){
                             lastPercent=percent;
                             final int shown=percent;
-                            main.post(()->{if(!destroyed)emit("downloading","APK indiriliyor: %"+shown);});
+                            main.post(()->{
+                                if(!destroyed && downloading && !cancelRequested) {
+                                    downloadProgress=shown;
+                                    emit("downloading","APK indiriliyor: %"+shown);
+                                }
+                            });
                         }
                     }
                     out.getFD().sync();
                 }
+                if(cancelRequested)throw new java.io.InterruptedIOException("Cancelled update");
                 if(total!=next.size||!MessageDigest.isEqual(hex(digest.digest()).getBytes(StandardCharsets.US_ASCII),
                         next.sha.getBytes(StandardCharsets.US_ASCII)))throw new SecurityException("APK checksum mismatch");
                 validatePackage(tmp,next.code,next.version);
+                if(cancelRequested)throw new java.io.InterruptedIOException("Cancelled update");
                 if(dest.exists()&&!dest.delete())throw new IllegalStateException("Cannot replace old APK");
                 if(!tmp.renameTo(dest))throw new IllegalStateException("Cannot finalize download");
             }catch(Exception e){
                 Log.w(TAG,"Update verification failed ("+e.getClass().getSimpleName()+")");
-                error=e instanceof SecurityException?"APK imzası veya SHA-256 doğrulanamadı. Güncelleme kurulmadı.":
+                error=cancelRequested?"İndirme iptal edildi; eksik APK silindi.":
+                    e instanceof SecurityException?"APK imzası veya SHA-256 doğrulanamadı. Güncelleme kurulmadı.":
                        "APK indirilemedi veya doğrulanamadı. İnternet ve dağıtım adresini kontrol et.";
                 // Never delete a previously verified APK on download failure.
                 tmp.delete();
             }
             final String failure=error;
+            final boolean canceled=cancelRequested;
             main.post(()->{
                 if(destroyed)return;
-                busy=false;
-                if(failure!=null){verified=null;emit("error",failure);}
+                busy=false;downloading=false;
+                if(failure!=null || canceled) {
+                    verified=null;
+                    emit(canceled?"cancelled":"error",canceled?"İndirme iptal edildi; eksik APK silindi.":failure);
+                }
                 else {
                     verified=dest;
                     emit("ready","APK doğrulandı. Android kurulum iznini onaylayarak güncelleyebilirsin.");
@@ -328,11 +354,6 @@ final class LanuUpdater {
             emit("ready","Kurulum izni verildi. ‘Güncellemeyi kur’ düğmesine dokun.");
         }
     }
-    void releasePage(){
-        if(!mayPromptUser())return;
-        try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(RELEASE_PAGE)));}
-        catch(ActivityNotFoundException e){emit("error","Sürüm sayfası açılamadı.");}
-    }
     void close(){destroyed=true;io.shutdownNow();}
 
     static boolean isFeedUrl(String url){
@@ -379,7 +400,7 @@ final class LanuUpdater {
             }
         }finally{c.disconnect();}
     }
-    private static InputStream openApk(String url) throws Exception {
+    private InputStream openApk(String url) throws Exception {
         String next=url;
         for(int i=0;i<5;i++){
             URL u=new URL(next);
@@ -390,9 +411,16 @@ final class LanuUpdater {
                 ||"objects.githubusercontent.com".equals(host)))throw new SecurityException("Invalid download host");
             HttpsURLConnection c=connection(next);
             int status=c.getResponseCode();
-            if(status==200)return new java.io.FilterInputStream(c.getInputStream()){
-                @Override public void close() throws java.io.IOException {try{super.close();}finally{c.disconnect();}}
-            };
+            if(status==200) {
+                InputStream downloaded=c.getInputStream();
+                activeDownloadConnection=c;
+                return new java.io.FilterInputStream(downloaded){
+                    @Override public void close() throws java.io.IOException {
+                        try{super.close();}
+                        finally{activeDownloadConnection=null;c.disconnect();}
+                    }
+                };
+            }
             String loc=c.getHeaderField("Location");c.disconnect();
             if((status!=301&&status!=302&&status!=303&&status!=307&&status!=308)||loc==null)throw new IllegalStateException("APK HTTP error");
             next=new URL(u,loc).toExternalForm();
