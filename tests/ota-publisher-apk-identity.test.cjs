@@ -24,7 +24,7 @@ echo "package: name='$MOCK_PACKAGE' versionCode='$MOCK_CODE' versionName='$MOCK_
 `,{mode:0o755});
   const env={...process.env,PATH:bin+':'+process.env.PATH,
     GH_TOKEN:'test-only',GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',
-    GITHUB_RUN_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.10',
+    OTA_BUILD_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.10',
     LANU_OTA_MANIFEST_URL:'https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json',
     LANU_RELEASE_CERT_SHA256:cert,MOCK_GH_LOG:log,
     MOCK_PACKAGE:'com.lanu.sesli',MOCK_CODE:'120',MOCK_VERSION:'2.0.10',MOCK_SIGNERS:'1'};

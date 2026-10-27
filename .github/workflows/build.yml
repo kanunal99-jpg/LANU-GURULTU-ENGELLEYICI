@@ -35,7 +35,7 @@ jobs:
       - name: Arama yaşam döngüsü testleri
         run: node --test tests/*.test.cjs
       - name: OTA ve APK doğrulayıcı sözdizimi
-        run: bash -n scripts/publish-ota.sh scripts/verify-release-apk.sh scripts/verify-draft-release-assets.sh scripts/verify-installed-ota-compatibility.sh scripts/prepare-ota-upgrade-apks.sh scripts/test-ota-upgrade-emulator.sh
+        run: bash -n scripts/publish-ota.sh scripts/verify-release-apk.sh scripts/verify-draft-release-assets.sh scripts/verify-installed-ota-compatibility.sh scripts/prepare-ota-upgrade-apks.sh scripts/test-ota-upgrade-emulator.sh scripts/verify-ota-promotion-candidate.sh
       - name: Yerel PeerJS bütünlüğü
         run: echo '3102769ebd9883d5892fe332ba2f46f029af5b144577ac507805f1fda76b7478  app/src/main/assets/vendor/peerjs.min.js' | sha256sum -c -
       - name: İki istemci WebRTC ses bağlantısı
@@ -122,19 +122,21 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Production signing secrets missing: publishing a debug-signed prerelease, NOT OTA-compatible."
           fi
-      - name: OTA imzalama koşulları
+      - name: Üretim APK imzalama koşulları (dağıtım ayrı onaya bağlı)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
-          PUBLIC_TOKEN: ${{ secrets.LANU_OTA_PUBLISH_TOKEN }}
           PINNED_CERT: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
           OTA_FEED: ${{ vars.LANU_OTA_MANIFEST_URL }}
           SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
-          if [[ "$SIGNED" == "true" || -n "$PUBLIC_TOKEN" || -n "$PINNED_CERT" ]]; then
-            if [[ "$SIGNED" != "true" || -z "$PUBLIC_TOKEN" || -z "$PINNED_CERT" || -z "$OTA_FEED" ]]; then
-              echo "::error::Production OTA is only allowed with all signing secrets, public publisher token, certificate and feed configured."
+          if [[ "$SIGNED" == "true" ]]; then
+            if [[ -z "$PINNED_CERT" || -z "$OTA_FEED" ]]; then
+              echo "::error::Production APK requires pinned signing certificate and production feed."
               exit 1
             fi
+          elif [[ -n "$PINNED_CERT" ]]; then
+            echo "::error::Production certificate configured without complete original keystore."
+            exit 1
           fi
       - name: APK imzası ve içerik doğrulaması
         run: |
@@ -231,20 +233,14 @@ jobs:
           # Publish only the exact numeric draft ID already read back.
           gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false -F prerelease=true --jq '.draft' | grep -x false
 
-      - name: OTA herkese açık sadece-APK dağıtımı
+      # Never publish a newly built APK as a live OTA merely because secrets
+      # were configured. The specific signed binary must be installed and
+      # approved after a physical-device PIN/data preservation acceptance.
+      # An independent manual workflow promotes only that exact SHA-256.
+      - name: İmzalı OTA adayı için gerçek cihaz kabulü bekle
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signing.outputs.signed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.LANU_OTA_PUBLISH_TOKEN }}
-          OTA_APK: dist/Lanu-Lens-2.0.10.apk
-          OTA_VERSION: "2.0.10"
-          LANU_RELEASE_CERT_SHA256: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
         run: |
-          if [[ -z "$GH_TOKEN" ]]; then
-            echo "::notice::Public distribution token missing: private release built, OTA remains unconfigured."
-            exit 0
-          fi
-          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
-          bash scripts/publish-ota.sh
+          echo "::notice::Private production candidate verified. Public OTA remains OFF until exact APK hash is approved and publish-approved-ota workflow succeeds."
 
   # Android 10 OTA compatibility is a separate emulator job; an API 35
   # smoke test alone cannot establish the lower-bound behaviour.

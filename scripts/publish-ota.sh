@@ -4,7 +4,7 @@
 set -euo pipefail
 : "${GH_TOKEN:?A scoped LANU_OTA_PUBLISH_TOKEN is required}"
 : "${GITHUB_REPOSITORY_OWNER:?Missing owner}"
-: "${GITHUB_RUN_NUMBER:?Missing build number}"
+: "${OTA_BUILD_NUMBER:?Missing explicitly selected and device-accepted APK build number}"
 : "${OTA_APK:?Missing signed APK path}"
 : "${OTA_VERSION:?Missing version}"
 : "${LANU_OTA_MANIFEST_URL:?Missing app manifest address}"
@@ -13,7 +13,7 @@ repo="${GITHUB_REPOSITORY_OWNER}/LANU-LENS-OTA"
 feed="https://raw.githubusercontent.com/${repo}/main/latest.json"
 [[ "${LANU_OTA_MANIFEST_URL}" == "${feed}" ]] || { echo "::error::Manifest URL does not match binary-only repository"; exit 1; }
 [[ "${GITHUB_REPOSITORY_OWNER}" == "kanunal99-jpg" ]] || { echo "::error::Unexpected publishing owner"; exit 1; }
-[[ "${GITHUB_RUN_NUMBER}" =~ ^[0-9]+$ ]] || exit 1
+[[ "${OTA_BUILD_NUMBER}" =~ ^[0-9]+$ ]] || exit 1
 [[ "${OTA_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
 [[ -s "${OTA_APK}" ]] || exit 1
 [[ "$(gh repo view "${repo}" --json visibility --jq '.visibility')" == "PUBLIC" ]] || {
@@ -39,7 +39,7 @@ badging="$(aapt dump badging "${OTA_APK}")"
 pkg="$(printf '%s\n' "${badging}" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -1)"
 actual_code="$(printf '%s\n' "${badging}" | sed -n "s/^package: .*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -1)"
 actual_version="$(printf '%s\n' "${badging}" | sed -n "s/^package: .*versionName='\\([^']*\\)'.*/\\1/p" | head -1)"
-if [[ "${pkg}" != "com.lanu.sesli" || "${actual_code}" != "${GITHUB_RUN_NUMBER}" || "${actual_version}" != "${OTA_VERSION}" ]]; then
+if [[ "${pkg}" != "com.lanu.sesli" || "${actual_code}" != "${OTA_BUILD_NUMBER}" || "${actual_version}" != "${OTA_VERSION}" ]]; then
   echo "::error::APK package, versionCode or versionName mismatch; refusing OTA publication"
   exit 1
 fi
@@ -68,7 +68,7 @@ if gh api "repos/${repo}/contents/latest.json?ref=main" > "${workdir}/previous.j
       echo "::error::Existing public OTA manifest is invalid; refusing overwrite."
       exit 1
     }
-  if [[ ! "${old_code}" =~ ^[0-9]+$ ]] || (( old_code >= GITHUB_RUN_NUMBER )); then
+  if [[ ! "${old_code}" =~ ^[0-9]+$ ]] || (( old_code >= OTA_BUILD_NUMBER )); then
     echo "::error::OTA latest.json is malformed or already newer; refusing rollback"
     exit 1
   fi
@@ -80,7 +80,7 @@ else
 fi
 
 filename="$(basename "${OTA_APK}")"
-tag="v${OTA_VERSION}-build${GITHUB_RUN_NUMBER}"
+tag="v${OTA_VERSION}-build${OTA_BUILD_NUMBER}"
 checksum="$(sha256sum "${OTA_APK}" | awk '{print $1}')"
 bytes="$(stat -c%s "${OTA_APK}")"
 [[ "${bytes}" -ge 1024 && "${bytes}" -le 167772160 ]] || exit 1
@@ -127,7 +127,7 @@ if [[ "${public_available}" != true ]]; then
 fi
 jq -cn \
   --argjson schema 1 \
-  --argjson versionCode "${GITHUB_RUN_NUMBER}" \
+  --argjson versionCode "${OTA_BUILD_NUMBER}" \
   --arg versionName "${OTA_VERSION}" \
   --arg apkUrl "${url}" \
   --arg sha256 "${checksum}" \
