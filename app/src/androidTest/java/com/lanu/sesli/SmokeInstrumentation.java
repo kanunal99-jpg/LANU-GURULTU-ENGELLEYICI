@@ -5,6 +5,8 @@ import android.app.Instrumentation;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.view.MotionEvent;
 import android.view.InputDevice;
 import org.json.JSONArray;
@@ -223,8 +225,16 @@ public class SmokeInstrumentation extends Instrumentation {
             SystemClock.sleep(150+attempt*250);
             js(web,"window.__entryTrace=[]");
             long probe=SystemClock.uptimeMillis();
-            pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(75);
-            pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
+            if(Build.VERSION.SDK_INT<=29) {
+                // Android 10 may reject UiAutomation.injectInputEvent despite a
+                // focused app window. The shell's native input command still
+                // delivers real OS touch events; never synthesize DOM events.
+                shellTouch(point[0],point[1],point[0],point[1],75);
+            }else{
+                pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(75);
+                pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);
+            }
+            waitForIdleSync();
             observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
                     +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
                     +"if(t)return t.touches[0];"
@@ -244,11 +254,29 @@ public class SmokeInstrumentation extends Instrumentation {
         js(web,"window.__entryTrace=[]");
         requireForegroundWindow(web);
         long down=SystemClock.uptimeMillis();
-        pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
-        if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}
-        else SystemClock.sleep(duration);
-        pointer(down,MotionEvent.ACTION_UP,point[0],point[1]);
+        if(Build.VERSION.SDK_INT<=29){
+            shellTouch(point[0],point[1],jitter?point[0]+3*point[2]:point[0],
+                    jitter?point[1]+2*point[2]:point[1],duration);
+        }else{
+            pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
+            if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}
+            else SystemClock.sleep(duration);
+            pointer(down,MotionEvent.ACTION_UP,point[0],point[1]);
+        }
         waitForIdleSync();
+    }
+    private void shellTouch(float x0,float y0,float x1,float y1,long duration) throws Exception {
+        // The input touchscreen swipe command runs as Android's shell UID.
+        // Events reach the OS input dispatcher and the actual WebView.
+        // Reading the command's stdout until EOF waits for gesture completion.
+        String command="input touchscreen swipe "+Math.round(x0)+" "+Math.round(y0)
+                +" "+Math.round(x1)+" "+Math.round(y1)+" "+Math.max(1,duration);
+        try(ParcelFileDescriptor.AutoCloseInputStream output=
+                new ParcelFileDescriptor.AutoCloseInputStream(
+                    getUiAutomation().executeShellCommand(command))){
+            byte[] discard=new byte[256];
+            while(output.read(discard)!=-1) { /* no user data */ }
+        }
     }
     private void pointer(long down,int action,float x,float y) {
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
