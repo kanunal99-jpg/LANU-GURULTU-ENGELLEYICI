@@ -140,7 +140,7 @@
       // Bridge messages are ordered on the native main thread; grant update
       // access only after a successful PIN unlock, before the first check.
       if(window.LanuUpdate && typeof window.LanuUpdate.setPrivateUnlocked==='function')window.LanuUpdate.setPrivateUnlocked(true);
-      $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();touch();
+      $('pinForm').reset();$('contactsEnabled').checked=!!data.contactsEnabled;renderContacts();renderDrafts();touch();
       if(calls())calls().activate();
       // Best-effort version check after PIN entry, never before unlocking.
       if(window.LanuUpdate && typeof window.LanuUpdate.check==='function')window.LanuUpdate.check();
@@ -170,7 +170,9 @@
     $('downloadUpdate').hidden=$('installUpdate').hidden=true;
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
-    $('contactList').replaceChildren();$('contactName').value=$('partner').value=$('pairCode').value='';
+    $('contactList').replaceChildren();$('draftList').replaceChildren();
+    $('draftPeer').value=$('draftText').value='';$('draftStatus').textContent='';
+    $('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
   }
@@ -179,10 +181,31 @@
     const operation=async()=>{
       if(!opened||!vault||!vault.data||scheduledEpoch!==gateEpoch)return false;
       const token=gateEpoch,candidate=JSON.parse(JSON.stringify(vault.data));update(candidate);
-      try{await vault.write(candidate);if(opened&&token===gateEpoch){vault.data=candidate;renderContacts();}return true;}
+      try{await vault.write(candidate);if(opened&&token===gateEpoch){vault.data=candidate;renderContacts();renderDrafts();}return true;}
       catch(_){if(opened)$('pairStatus').textContent='Değişiklik kaydedilemedi. Depolamayı kontrol et.';return false;}
     };
     writes=writes.then(operation,operation);return writes;
+  }
+  function renderDrafts() {
+    const list=$('draftList');list.replaceChildren();
+    if(!opened||!vault||!vault.data)return;
+    const drafts=Array.isArray(vault.data.messages)?vault.data.messages:[];
+    for (const draft of drafts) {
+      const row=document.createElement('article');row.className='draft-item';
+      const heading=document.createElement('strong');heading.textContent='Kod: '+draft.peer;
+      const body=document.createElement('p');body.textContent=draft.text;
+      const remove=document.createElement('button');
+      remove.type='button';remove.className='secondary';remove.textContent='Taslağı sil';
+      remove.addEventListener('click',()=>persist(data=>{
+        data.messages=(data.messages||[]).filter(item=>item.id!==draft.id);
+      }).then(ok=>{$('draftStatus').textContent=ok?'Taslak şifreli kasadan silindi.':'Taslak silinemedi.';}));
+      row.append(heading,body,remove);list.append(row);
+    }
+  }
+  function secureDraftId() {
+    if(!window.crypto||typeof window.crypto.getRandomValues!=='function')return null;
+    const bytes=window.crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   }
   function renderContacts() {
     $('contactList').replaceChildren(); if(!opened||!vault.data)return;
@@ -343,6 +366,31 @@
   $('codeChangeSubmit').addEventListener('click',()=>{
     if(!opened)return;
     if(calls()&&calls().rotateCode())$('codeChangeConfirm').hidden=true;
+  });
+  $('draftPeer').addEventListener('input',()=>{
+    $('draftPeer').value=$('draftPeer').value.replace(/\\D/g,'').slice(0,6);
+  });
+  $('saveDraft').addEventListener('click',async()=>{
+    if(!opened||!vault||!vault.data||document.hidden)return;
+    const peer=$('draftPeer').value.trim(),body=$('draftText').value.trim();
+    if(!/^[1-9][0-9]{5}$/.test(peer)||!body||body.length>1000){
+      $('draftStatus').textContent='6 haneli kod ve en fazla 1000 karakterlik mesaj gerekli.';return;
+    }
+    const id=secureDraftId();
+    if(!id){$('draftStatus').textContent='Güvenli rastgele sayı üretilemedi; mesaj kaydedilmedi.';return;}
+    $('saveDraft').disabled=true;
+    try {
+      const ok=await persist(data=>{
+        if(!data.messages)data.messages=[];
+        if(data.messages.length>=80)throw Error('Full');
+        data.messages.push({id,peer,text:body,createdAt:Date.now()});
+      });
+      if(ok && opened){
+        $('draftText').value='';
+        $('draftStatus').textContent='Mesaj şifreli PIN kasasına kaydedildi. Karşı tarafa gönderilmedi.';
+      } else if(opened){$('draftStatus').textContent='Taslak kaydedilemedi. PIN kasasını kontrol et.';}
+    }catch(_){if(opened)$('draftStatus').textContent='En fazla 80 taslak saklanabilir.';}
+    finally{$('saveDraft').disabled=false;}
   });
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
   $('incomingEnabled').addEventListener('change',async()=>{const desired=$('incomingEnabled').checked;const ok=await persist(data=>{data.incomingEnabled=desired;});if(ok&&opened){allowIncoming=desired;try{storage().setItem('lens-listen',String(desired));}catch(_){}}else $('incomingEnabled').checked=!desired;});

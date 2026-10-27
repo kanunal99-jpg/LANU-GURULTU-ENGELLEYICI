@@ -20,6 +20,23 @@
         throw new Error('Şifreli rehber kaydı geçersiz.');
       }
     }
+    // Optional for backward compatibility with existing v1 encrypted vaults.
+    // Private drafts are never written to an unencrypted localStorage key.
+    if (data.messages !== undefined) {
+      if (!Array.isArray(data.messages) || data.messages.length > 80)
+        throw Error('Şifreli mesaj taslakları sınırı aşıldı.');
+      const ids = new Set();
+      for (const item of data.messages) {
+        if (!validObject(item) || Object.keys(item).sort().join(',')!=='createdAt,id,peer,text' ||
+            typeof item.id !== 'string' || !/^[a-f0-9]{32}$/.test(item.id) ||
+            ids.has(item.id) || typeof item.peer !== 'string' ||
+            !/^[1-9][0-9]{5}$/.test(item.peer) ||
+            typeof item.text !== 'string' || !item.text.trim() || item.text.length > 1000 ||
+            !Number.isSafeInteger(item.createdAt) || item.createdAt < 1)
+          throw Error('Geçersiz şifreli mesaj taslağı.');
+        ids.add(item.id);
+      }
+    }
     return data;
   }
   function parseRecord(raw) {
@@ -59,7 +76,7 @@
     async create(pin, canCommit = () => true) {
       const epoch = this.epoch, operation = ++this.operation;
       const salt = this.crypto.getRandomValues(new Uint8Array(16)), key = await this.derive(pin,salt);
-      const data = this.data || {contactsEnabled:false,contacts:[],incomingEnabled:true};
+      const data = this.data || {contactsEnabled:false,contacts:[],incomingEnabled:true,messages:[]};
       await this.persist(data,key,salt,canCommit,epoch,operation);
       this.key = key; this.salt = salt; this.data = data; return data;
     }

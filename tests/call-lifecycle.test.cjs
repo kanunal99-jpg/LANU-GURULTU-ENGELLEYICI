@@ -8,6 +8,7 @@ const source = fs.readFileSync('app/src/main/assets/app.js', 'utf8');
 function harness(options = {}) {
   const elements = {}, events = {}, timers = new Map(), peers = [], native = [], ringing = [], ringback = [], incomingNotifications = [];
   let timerId = 0, requested = 0, resolveMedia, rejectMedia;
+  const captureRequests = [];
   class Element {
     constructor(id) { this.id = id; this.checked = true; this.hidden = false; this.value = ''; this.textContent = ''; this.events = {}; }
     addEventListener(event, fn) { this.events[event] = fn; }
@@ -26,7 +27,7 @@ function harness(options = {}) {
   const stream = {getTracks: () => [track], getAudioTracks: () => [track]};
   const media = {
     getSupportedConstraints: () => ({noiseSuppression: true, echoCancellation: true, autoGainControl: true}),
-    getUserMedia() { requested++; return new Promise((resolve, reject) => { resolveMedia = resolve; rejectMedia = reject; }); }
+    getUserMedia(constraints) { captureRequests.push(constraints); requested++; return new Promise((resolve, reject) => { resolveMedia = resolve; rejectMedia = reject; }); }
   };
   class Connection extends EventEmitter {
     constructor(remote = 'lanu-sesli-654321') { super(); this.peer = remote; this.connectionId = 'call-1'; this.closed = 0; this.answered = 0; this.pcEvents = {}; this.peerConnection = {connectionState:'connected', addEventListener:(event,fn)=>{this.pcEvents[event]=fn;}}; }
@@ -35,7 +36,7 @@ function harness(options = {}) {
   }
   class Peer extends EventEmitter {
     constructor(id) { super(); this.id = id; this.destroyed = false; this.disconnected = false; this.calls = []; this.channels = []; peers.push(this); }
-    call(id) { const connection = new Connection(id); this.calls.push(connection); return connection; }
+    call(id, mediaStream, options) { const connection = new Connection(id); connection.options = options; this.calls.push(connection); return connection; }
     connect(remote, config) { const channel = new Connection(remote); Object.assign(channel, config); channel.send = data => { channel.sent = data; }; this.channels.push(channel); return channel; }
     destroy() { this.destroyed = true; this.emit('disconnected'); }
     reconnect() { this.disconnected = false; this.reconnected = true; }
@@ -50,13 +51,14 @@ function harness(options = {}) {
     LanuAudio: {setRinging:value=>ringing.push(value),setIncomingNotification:value=>incomingNotifications.push(value),setRingback:value=>ringback.push(value),setCallActive: value => native.push(value), setSpeaker() {}, requestBluetooth() {}} };
   if(options.lens) context.LanuLens={canReceive:()=>options.lensListen===true,isOpen:()=>options.lensOpen!==false,callState(){},pairStatus(){},clearPair(){}};
   context.window = context;
+  document.getElementById('videoEnabled').checked = false;
   vm.runInNewContext(source, context);
   const get = id => document.getElementById(id);
   const flush = () => new Promise(resolve => setImmediate(resolve));
   const open = () => { peers.at(-1).emit('open'); };
   return {get, peers, track, stream, events, timers, context, native, ringing, ringback, incomingNotifications, open, flush, requested: () => requested,
     resolve: (providedStream = stream) => resolveMedia(providedStream), reject: name => rejectMedia({name}),
-    Connection, click: id => get(id).events.click(),
+    captureRequests, Connection, click: id => get(id).events.click(),
     deadline: () => { for (const [id, timer] of timers) if (timer.delay === 45000) { timers.delete(id); timer.fn(); } }
   };
 }
@@ -654,4 +656,62 @@ test('pairing spam attempts from same six-digit code are throttled',()=>{
  const fourth=new h.Connection();fourth.label='lanu-pair-v1';
  h.peers[0].emit('connection',fourth);
  assert.ok(fourth.closed>0);
+});
+
+test('audio-only remains the default and never requests the camera',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.click('callBtn');
+ assert.equal(h.captureRequests[0].video,false);
+ h.resolve();await h.flush();
+ assert.equal(h.peers[0].calls[0].options.metadata.video,false);
+});
+test('explicit video opt-in publishes a live video track and releases it at hangup',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.get('videoEnabled').checked=true;h.click('callBtn');
+ assert.equal(h.captureRequests[0].video.facingMode,'user');
+ let onVideoEnded;
+ const camera={readyState:'live',stopped:0,stop(){this.stopped++;},
+   addEventListener(type,fn){if(type==='ended')onVideoEnded=fn;}};
+ const media={getTracks:()=>[h.track,camera],getAudioTracks:()=>[h.track],getVideoTracks:()=>[camera]};
+ h.resolve(media);await h.flush();
+ assert.equal(h.peers[0].calls[0].options.metadata.video,true);
+ assert.equal(h.get('videoPanel').hidden,false);
+ assert.equal(h.get('localVideo').srcObject,media);
+ camera.readyState='ended';onVideoEnded();
+ assert.equal(h.peers[0].calls[0].closed,0,'video loss must not kill audio');
+ h.click('hangBtn');
+ assert.equal(camera.stopped,1);
+ assert.equal(h.track.stopped,1);
+ assert.equal(h.get('videoPanel').hidden,true);
+ assert.equal(h.get('localVideo').srcObject,null);
+});
+test('missing camera permission downgrades visibly and never lies about video',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.get('videoEnabled').checked=true;h.click('callBtn');
+ h.reject('NotAllowedError');await h.flush();
+ assert.equal(h.captureRequests.length,2);
+ assert.equal(h.captureRequests[1].video,false);
+ h.resolve();await h.flush();
+ assert.equal(h.peers[0].calls[0].options.metadata.video,false);
+ assert.equal(h.get('videoStatus').textContent.includes('Kamera açılamadı'),true);
+});
+test('remote incoming video is rendered without doubling call audio',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.click('callBtn');h.resolve();await h.flush();
+ const remoteVideo={readyState:'live',addEventListener(){}};
+ const remote={getAudioTracks:()=>[h.track],getVideoTracks:()=>[remoteVideo]};
+ h.peers[0].calls[0].emit('stream',remote);
+ assert.equal(h.get('remoteVideo').srcObject,remote);
+ assert.equal(h.get('remoteVideo').muted,undefined,'video is muted by HTML attribute, not injected playback');
+ h.click('hangBtn');assert.equal(h.get('remoteVideo').srcObject,null);
+});
+test('noise profile changes checkbox state and applies live supported constraints',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ let applied;h.track.applyConstraints=async settings=>{applied=settings;};
+ h.click('callBtn');h.resolve();await h.flush();
+ h.get('noisePreset').value='noisy';await h.get('noisePreset').events.change();
+ assert.equal(h.get('ns').checked,true);
+ assert.equal(h.get('ec').checked,true);
+ assert.equal(h.get('agc').checked,true);
+ assert.equal(applied.autoGainControl,true);
 });

@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/index.html";
     private static final int MICROPHONE = 10, BLUETOOTH = 11, CAMERA = 12, SAVE_PHOTO = 13, NOTIFY = 14,
-            SAVE_BACKUP = 15, LOAD_BACKUP = 16;
+            SAVE_BACKUP = 15, LOAD_BACKUP = 16, VIDEO_CALL_CAPTURE = 17;
     private static final int MAX_BACKUP_BYTES = 400 * 1024;
     private static final String CALL_CHANNEL = "lanu-call-v1";
     private static final String OPEN_INCOMING = "com.lanu.sesli.OPEN_INCOMING";
@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private LanuUpdater updater;
     private AudioManager audio;
-    private PermissionRequest pendingMicrophone, pendingCamera;
+    private PermissionRequest pendingMicrophone, pendingCamera, pendingVideoCall;
     private Ringtone ringtone;
     private Vibrator vibrator;
     private ToneGenerator ringback;
@@ -184,6 +184,7 @@ public class MainActivity extends Activity {
             @Override public void onPermissionRequestCanceled(PermissionRequest request) {
                 if (pendingMicrophone == request) pendingMicrophone = null;
                 if (pendingCamera == request) pendingCamera = null;
+                if (pendingVideoCall == request) pendingVideoCall = null;
             }
         });
         web.loadUrl(HOME);
@@ -199,23 +200,54 @@ public class MainActivity extends Activity {
     private void requestCapture(PermissionRequest request) {
         if (destroyed || !visible || !localOrigin(request.getOrigin())) { request.deny(); return; }
         String[] resources = request.getResources();
-        // Camera and microphone are requested independently, only for their UI action.
-        if (resources.length != 1) { request.deny(); return; }
-        boolean camera = PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resources[0]);
-        boolean microphone = PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0]);
+        if (resources.length < 1 || resources.length > 2) { request.deny(); return; }
+        boolean camera = false, microphone = false;
+        for (String resource : resources) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource) && !camera) camera = true;
+            else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource) && !microphone) microphone = true;
+            else { request.deny(); return; } // No extra/duplicate resources.
+        }
         if (!camera && !microphone) { request.deny(); return; }
-        // Camera is available on the public-facing decoy screen, but WebRTC
-        // microphone capture requires a live PIN-unlocked private session.
+        // Camera can be used on the public camera screen. Microphone capture
+        // and combined video calls REQUIRE a PIN-unlocked private session.
         if (microphone && !privateUnlocked) { request.deny(); return; }
+        if (pendingCamera != null || pendingMicrophone != null || pendingVideoCall != null) {
+            request.deny(); return;
+        }
+        if (camera && microphone) {
+            // WebRTC can request both resources in one PermissionRequest. The
+            // old single-resource gate rejected every such video call.
+            if (!privateUnlocked) { request.deny(); return; }
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                request.grant(resources); return;
+            }
+            pendingVideoCall = request;
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, VIDEO_CALL_CAPTURE);
+            return;
+        }
         String permission = camera ? Manifest.permission.CAMERA : Manifest.permission.RECORD_AUDIO;
         if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) request.grant(resources);
-        else if (pendingCamera == null && pendingMicrophone == null) {
+        else {
             if(camera) pendingCamera=request; else pendingMicrophone=request;
             requestPermissions(new String[]{permission}, camera ? CAMERA : MICROPHONE);
-        } else request.deny();
+        }
     }
     @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
+        if (code == VIDEO_CALL_CAPTURE) {
+            PermissionRequest request = pendingVideoCall; pendingVideoCall = null;
+            if (request != null) {
+                boolean granted = !destroyed && visible && privateUnlocked && localOrigin(request.getOrigin())
+                        && results.length == 2
+                        && results[0] == PackageManager.PERMISSION_GRANTED
+                        && results[1] == PackageManager.PERMISSION_GRANTED;
+                if (granted) request.grant(new String[]{
+                    PermissionRequest.RESOURCE_VIDEO_CAPTURE, PermissionRequest.RESOURCE_AUDIO_CAPTURE
+                });
+                else request.deny();
+            }
+        }
         if (code == MICROPHONE || code == CAMERA) {
             PermissionRequest request = code == CAMERA ? pendingCamera : pendingMicrophone;
             if (code == CAMERA) pendingCamera=null; else pendingMicrophone=null;
