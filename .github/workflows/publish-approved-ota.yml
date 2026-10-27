@@ -1,0 +1,97 @@
+name: Onaylanan APK'yi OTA'ya yayımla
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Gerçek cihazda denenmiş kaynak depo sürümü (ör. v2.0.10-build250)"
+        required: true
+        type: string
+      accepted_sha256:
+        description: "Gerçek cihazda test edilen APK dosyasının 64 haneli SHA-256 değeri"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: lanu-ota-production-public-manifest
+  cancel-in-progress: false
+jobs:
+  promote-ota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OTA_PROMOTE_TAG: ${{ inputs.release_tag }}
+      OTA_ACCEPTED_SHA256: ${{ inputs.accepted_sha256 }}
+      OTA_PROMOTE_DIR: ${{ runner.temp }}/lanu-approved-ota
+      LANU_OTA_DEVICE_ACCEPTED_APK_SHA256: ${{ vars.LANU_OTA_DEVICE_ACCEPTED_APK_SHA256 }}
+      LANU_RELEASE_CERT_SHA256: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
+      LANU_OTA_MANIFEST_URL: ${{ vars.LANU_OTA_MANIFEST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - name: Android APK imza doğrulayıcılarını kur
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+      - name: Fiziksel cihaz kabulü, SHA ve sürüm kimliği ön denetimi
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$OTA_PROMOTE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-build[1-9][0-9]*$ ]] || {
+            echo "::error::Invalid tag format"; exit 1;
+          }
+          test -n "$LANU_OTA_DEVICE_ACCEPTED_APK_SHA256" || {
+            echo "::error::Device acceptance variable is absent; OTA remains disabled"; exit 1;
+          }
+          test -n "$LANU_OTA_MANIFEST_URL" || {
+            echo "::error::Pinned production manifest variable is absent"; exit 1;
+          }
+          test -n "${GH_TOKEN}" || exit 1
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${OTA_PROMOTE_TAG}" > "$RUNNER_TEMP/source-release.json"
+          jq -e --arg tag "$OTA_PROMOTE_TAG" '
+            .tag_name == $tag and .draft == false and .prerelease == true and
+            ([.assets[].name] | sort) ==
+              (["APK-BILGILERI.txt","APK-IMZA-DURUMU.txt","Lanu-Lens-2.0.10.apk","SHA256SUMS.txt"] | sort) and
+            (.target_commitish | type == "string" and length == 40)
+          ' "$RUNNER_TEMP/source-release.json"
+          commit="$(jq -er '.target_commitish' "$RUNNER_TEMP/source-release.json")"
+          git merge-base --is-ancestor "$commit" HEAD || {
+            echo "::error::Candidate source commit not present in approved main history"; exit 1;
+          }
+          mkdir -p "$OTA_PROMOTE_DIR"
+          for file in Lanu-Lens-2.0.10.apk SHA256SUMS.txt APK-BILGILERI.txt APK-IMZA-DURUMU.txt; do
+            gh release download "$OTA_PROMOTE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "$file" --dir "$OTA_PROMOTE_DIR"
+          done
+          bash scripts/verify-ota-promotion-candidate.sh
+      - name: Onaylanan APK'yi PUBLIC LANU-LENS-OTA deposuna yayımla
+        env:
+          GH_TOKEN: ${{ secrets.LANU_OTA_PUBLISH_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::LANU_OTA_PUBLISH_TOKEN missing; no OTA published"; exit 1
+          fi
+          [[ "$OTA_PROMOTE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-build([1-9][0-9]*)$ ]]
+          export OTA_VERSION="${BASH_REMATCH[1]}"
+          export OTA_BUILD_NUMBER="${BASH_REMATCH[2]}"
+          export OTA_APK="$OTA_PROMOTE_DIR/Lanu-Lens-2.0.10.apk"
+          bash scripts/publish-ota.sh
+      - name: Public OTA manifestini bağımsız geri oku
+        run: |
+          set -Eeuo pipefail
+          [[ "$OTA_PROMOTE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-build([1-9][0-9]*)$ ]]
+          code="${BASH_REMATCH[2]}"
+          curl --fail --silent --show-error --retry 3 --max-time 60 \
+            "https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json" > "$RUNNER_TEMP/ota-published.json"
+          jq -e --argjson code "$code" --arg sha "$OTA_ACCEPTED_SHA256" \
+            '.schema == 1 and .versionCode == $code and .sha256 == ($sha|ascii_downcase)' \
+            "$RUNNER_TEMP/ota-published.json"
+          echo "OTA manifest independently read back for approved build $code."
