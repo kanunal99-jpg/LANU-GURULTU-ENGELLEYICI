@@ -31,7 +31,10 @@ function draftHarness(items) {
   let opened=true;
   const context={document:doc,$,vault,opened,editingDraftId:null,window:{crypto:null},
     persist(action){action(vault.data);return Promise.resolve(true);}};
-  vm.runInNewContext(lensSource.slice(from,to)+'\nthis.renderDrafts=renderDrafts;this.resetDraftEditor=resetDraftEditor;',context);
+  const compatFrom=lensSource.indexOf('  function replaceChildrenCompat(');
+  const compatTo=lensSource.indexOf('  let vault,',compatFrom);
+  assert.ok(compatFrom>0 && compatTo>compatFrom,'Real PIN DOM compatibility helper is required');
+  vm.runInNewContext(lensSource.slice(compatFrom,compatTo)+lensSource.slice(from,to)+'\nthis.renderDrafts=renderDrafts;this.resetDraftEditor=resetDraftEditor;',context);
   return {context,$,vault,render:()=>context.renderDrafts(),setUnlocked:v=>{context.opened=v;}};
 }
 const drafts=[
@@ -81,5 +84,5 @@ test('locking private area clears search, editor, PIN draft DOM and ciphertext k
   assert.match(lensSource,/\$\('draftPeer'\)\.value=\$\('draftText'\)\.value=\$\('draftSearch'\)\.value=''/);
   assert.match(lensSource,/editingDraftId=null;\$\('saveDraft'\)\.textContent='Şifreli taslak kaydet'/);
   assert.match(lensSource,/if\(vault\)vault\.lock\(\)/);
-  assert.match(lensSource,/\$\('contactList'\)\.replaceChildren\(\);\$\('draftList'\)\.replaceChildren\(\)/);
+  assert.match(lensSource,/replaceChildrenCompat\(\$\('contactList'\)\);replaceChildrenCompat\(\$\('draftList'\)\)/);
 });

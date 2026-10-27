@@ -43,6 +43,7 @@ test('native statuses display current version and stronger newer release code ac
   h.event({state:'current',version:'2.0.11',versionCode:210,configured:true,message:'Güncel'});
   assert.equal(h.$('availableVersion').textContent,'Güncel');
   assert.equal(h.$('downloadUpdate').hidden,true);
+  assert.equal(h.$('updateFileSize').hidden,true);
 });
 test('unconfigured signatures never report a new version as installable',()=>{
   const h=updaterView();
@@ -51,6 +52,19 @@ test('unconfigured signatures never report a new version as installable',()=>{
   assert.equal(h.$('availableVersion').textContent,'Yayın bekleniyor');
   assert.equal(h.$('downloadUpdate').hidden,true);
   assert.equal(h.$('installUpdate').hidden,true);
+});
+test('APK size is shown only for a valid available release and not in the public PIN-locked view',()=>{
+  const h=updaterView();
+  h.event({state:'available',version:'2.0.10',versionCode:214,availableVersion:'2.0.11',availableVersionCode:220,availableSizeBytes:12*1048576});
+  assert.equal(h.$('updateFileSize').hidden,false);
+  assert.equal(h.$('updateFileSize').textContent,'Güncelleme APK boyutu: 12.0 MB');
+  h.event({state:'available',availableVersion:'2.0.11',availableSizeBytes:NaN});
+  assert.equal(h.$('updateFileSize').hidden,true);
+  h.event({state:'current'});
+  assert.equal(h.$('updateFileSize').textContent,'');
+  const locked=updaterView(false);
+  locked.event({state:'available',availableVersion:'2.0.11',availableSizeBytes:12*1048576});
+  assert.equal(locked.$('updateFileSize').hidden,true);
 });
 test('progress and cancellation are visible only during active download',()=>{
   const h=updaterView();
@@ -95,5 +109,7 @@ test('private update cards are responsive and progress control is accessible',()
   assert.match(html,/<progress id="updateProgress" max="100" value="0"><\/progress>/);
   assert.match(html,/label for="updateProgress"/);
   assert.match(css,/\.version-comparison/);
+  assert.match(html,/id="updateFileSize"/);
+  assert.match(native,/j\.put\("availableSizeBytes",latest\.size\)/);
   assert.match(css,/#updateProgressBox/);
 });

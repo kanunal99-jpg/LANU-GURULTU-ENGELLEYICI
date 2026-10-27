@@ -1,6 +1,13 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
+  // WebView on Android 10 may lack Element.replaceChildren(). Keep PIN
+  // initialization and update-screen access compatible without DOM polyfills.
+  function replaceChildrenCompat(node, ...children) {
+    if (typeof node.replaceChildren === 'function') { node.replaceChildren(...children); return; }
+    while (node.firstChild) node.removeChild(node.firstChild);
+    for (const child of children) node.appendChild(child);
+  }
   let vault, opened = false, mode = 'unlock', gateEpoch = 0, idle;
   let entries = [];
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
@@ -51,6 +58,12 @@
     $('availableVersion').textContent = hasNew
       ? event.availableVersion + ' (kod ' + (event.availableVersionCode || '?') + ')'
       : event.state === 'current' ? 'Güncel' : event.configured === false ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
+    const fileBytes = event.availableSizeBytes;
+    const validSize = hasNew && Number.isSafeInteger(fileBytes) && fileBytes >= 1024 && fileBytes <= 160 * 1024 * 1024;
+    $('updateFileSize').hidden = !validSize;
+    $('updateFileSize').textContent = validSize
+      ? 'Güncelleme APK boyutu: ' + (Math.round(fileBytes / 1048576 * 10) / 10).toFixed(1) + ' MB'
+      : '';
     $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
     const downloading = event.state === 'downloading' || event.state === 'cancelling';
     $('updateProgressBox').hidden = !downloading;
@@ -106,7 +119,7 @@
     const ratio = Math.min(1,1920/Math.max(width,height)); canvas.width = Math.round(width*ratio); canvas.height = Math.round(height*ratio);
     canvas.getContext('2d').drawImage(video,(video.videoWidth-width)/2,(video.videoHeight-height)/2,width,height,0,0,canvas.width,canvas.height);
     photo = canvas.toDataURL('image/jpeg',0.9); $('photoPreview').src = photo;
-    const img = document.createElement('img'); img.src = photo; img.alt = ''; $('lastPhoto').replaceChildren(img); $('lastPhoto').disabled = false;
+    const img = document.createElement('img'); img.src = photo; img.alt = ''; replaceChildrenCompat($('lastPhoto'),img); $('lastPhoto').disabled = false;
     $('photoView').hidden = false; $('photoStatus').textContent = 'Kaydetmek için aşağıdaki düğmeyi kullan.';
     message('Fotoğraf çekildi.');
   }
@@ -184,10 +197,12 @@
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=$('updateProgressBox').hidden=true;
     $('availableVersion').textContent='Henüz denetlenmedi';
+    $('updateFileSize').hidden=true;
+    $('updateFileSize').textContent='';
     $('updateStatus').textContent='Güvenli sürüm bilgileri kontrol edilecek.';
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
-    $('contactList').replaceChildren();$('draftList').replaceChildren();
+    replaceChildrenCompat($('contactList'));replaceChildrenCompat($('draftList'));
     $('draftPeer').value=$('draftText').value=$('draftSearch').value='';
     editingDraftId=null;$('saveDraft').textContent='Şifreli taslak kaydet';$('cancelDraftEdit').hidden=true;
     $('draftCount').textContent='';$('draftStatus').textContent='';
@@ -210,7 +225,7 @@
     $('saveDraft').textContent='Şifreli taslak kaydet';$('cancelDraftEdit').hidden=true;
   }
   function renderDrafts() {
-    const list=$('draftList');list.replaceChildren();
+    const list=$('draftList');replaceChildrenCompat(list);
     $('draftCount').textContent='';
     if(!opened||!vault||!vault.data)return;
     const all=Array.isArray(vault.data.messages)?vault.data.messages:[];
@@ -256,7 +271,7 @@
     return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   }
   function renderContacts() {
-    $('contactList').replaceChildren(); if(!opened||!vault.data)return;
+    replaceChildrenCompat($('contactList')); if(!opened||!vault.data)return;
     $('contactsEnabled').checked=!!vault.data.contactsEnabled; if(!vault.data.contactsEnabled)return;
     for(const contact of vault.data.contacts){
       if(!/^[1-9]\d{5}$/.test(contact.code))continue;

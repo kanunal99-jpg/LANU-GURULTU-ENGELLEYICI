@@ -51,7 +51,23 @@ old_sha=""
 if gh api "repos/${repo}/contents/latest.json?ref=main" > "${workdir}/previous.json" 2> "${workdir}/lookup.err"; then
   old_sha="$(jq -er '.sha | select(type=="string" and length > 10)' "${workdir}/previous.json")"
   old_b64="$(jq -er '.content | select(type=="string")' "${workdir}/previous.json" | tr -d '\n')"
-  old_code="$(printf '%s' "${old_b64}" | base64 -d | jq -er '.versionCode | select(type=="number" and . > 0)')"
+  # The public repository ships with an explicit EMPTY versionCode=0 sentinel.
+  # Accept only that exact bootstrap state, never an arbitrary malformed v0
+  # or a downgrade from a real, previously published production release.
+  old_code="$(printf '%s' "${old_b64}" | base64 -d | jq -er '
+    if (.schema == 1 and .versionCode == 0 and .versionName == "0.0.0"
+        and .apkUrl == "" and .sha256 == "" and .sizeBytes == 0) then 0
+    elif (.schema == 1 and (.versionCode|type) == "number"
+          and .versionCode > 0 and .versionCode == (.versionCode|floor)
+          and (.versionName|type) == "string"
+          and (.apkUrl|type) == "string"
+          and (.sha256|type) == "string"
+          and (.sizeBytes|type) == "number"
+          and .sizeBytes >= 1024) then .versionCode
+    else error("Malformed OTA manifest or unsafe bootstrap marker") end')" || {
+      echo "::error::Existing public OTA manifest is invalid; refusing overwrite."
+      exit 1
+    }
   if [[ ! "${old_code}" =~ ^[0-9]+$ ]] || (( old_code >= GITHUB_RUN_NUMBER )); then
     echo "::error::OTA latest.json is malformed or already newer; refusing rollback"
     exit 1
@@ -92,6 +108,23 @@ printf '%s  %s\n' "${checksum}" "${workdir}/verify/${filename}" | sha256sum -c -
 # Only after promotion may latest.json point consumers to this APK.
 gh release edit "${tag}" --repo "${repo}" --draft=false
 url="https://github.com/${repo}/releases/download/${tag}/${filename}"
+# Read back anonymously from the exact URL Android clients use. An authenticated
+# gh release download from a draft does not prove public availability. GitHub
+# CDN propagation may take a few seconds, so retry before failing closed.
+public_available=false
+for attempt in 1 2 3 4 5; do
+  if curl --fail --location --silent --show-error --connect-timeout 15 \
+      --max-time 120 --retry 1 --output "${workdir}/verify/public.apk" "${url}" &&
+      printf '%s  %s\n' "${checksum}" "${workdir}/verify/public.apk" | sha256sum -c -; then
+    public_available=true
+    break
+  fi
+  sleep "$((attempt * 2))"
+done
+if [[ "${public_available}" != true ]]; then
+  echo "::error::Verified APK could not be downloaded anonymously; OTA manifest not promoted."
+  exit 1
+fi
 jq -cn \
   --argjson schema 1 \
   --argjson versionCode "${GITHUB_RUN_NUMBER}" \
