@@ -182,17 +182,40 @@ public class SmokeInstrumentation extends Instrumentation {
         throw new AssertionError(label + " " + js(web,"JSON.stringify({trace:window.__entryTrace,gate:document.getElementById('gate').hidden,active:document.activeElement.id,viewport:[innerWidth,innerHeight],target:window.__entryTarget})"));
     }
     private void requireForegroundWindow(WebView web) throws Exception {
-        // Android 15 occasionally focuses system/IME windows just as a real
-        // touch begins. Sending an instrumentation event then raises
-        // "not directed at a window owned by uid". Never inject off-app.
+        // Never inject a gesture when another application owns the display.
         long deadline=SystemClock.uptimeMillis()+6000;
+        boolean collapsedSystemShade=false;
         while(SystemClock.uptimeMillis()<deadline){
             AtomicReference<Boolean> ownsFocus=new AtomicReference<>(false);
-            runOnMainSync(()->ownsFocus.set(web.isShown() && web.hasWindowFocus()));
+            runOnMainSync(()->{
+                web.setFocusableInTouchMode(true);
+                web.requestFocus();
+                ownsFocus.set(web.isShown() && web.hasWindowFocus());
+            });
             if(Boolean.TRUE.equals(ownsFocus.get()))return;
-            SystemClock.sleep(100);
+            // API29 native shell gestures near the header can wake the OS
+            // notification shade. Collapse it once, never fake WebView input.
+            if(Build.VERSION.SDK_INT<=29 && !collapsedSystemShade) {
+                collapsedSystemShade=true;
+                shellCommand("cmd statusbar collapse");
+            }
+            SystemClock.sleep(120);
         }
-        throw new AssertionError("Android app window never regained focus for real touch smoke");
+        throw new AssertionError("Android app window never regained focus for real touch smoke: "
+            +js(web,"JSON.stringify({focus:document.hasFocus(),target:window.__entryTarget,"
+                    +"trace:window.__entryTrace,gate:document.getElementById('gate').hidden})")
+            +" Android focus="+shellCommand("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'"));
+    }
+    private String shellCommand(String command) throws Exception {
+        try(ParcelFileDescriptor.AutoCloseInputStream output=
+                new ParcelFileDescriptor.AutoCloseInputStream(
+                    getUiAutomation().executeShellCommand(command))){
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            byte[] chunk=new byte[256];int n;
+            while((n=output.read(chunk))!=-1 && bytes.size()<2048)
+                bytes.write(chunk,0,Math.min(n,2048-bytes.size()));
+            return bytes.toString("UTF-8");
+        }
     }
     private void hold(WebView web,String id,long duration,boolean jitter) throws Exception {
         requireForegroundWindow(web);
