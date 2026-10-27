@@ -5,6 +5,14 @@
 const {DatabaseSync}=require('node:sqlite');
 const fs=require('node:fs'),path=require('node:path');
 const DEVICE=/^[0-9a-f]{64}$/,PUB=/^04[0-9a-f]{128}$/;
+// SQLite's quick_check reports corruption as result rows; simply executing
+// the pragma is not proof that the persisted authorization state is healthy.
+function assertDatabaseHealthy(db){
+  const rows=db.prepare('PRAGMA quick_check').all();
+  if(!Array.isArray(rows)||rows.length!==1||!rows[0]||
+     Object.values(rows[0]).length!==1||Object.values(rows[0])[0]!=='ok')
+    throw Error('SQLite integrity check failed');
+}
 class BrokerSqliteStore {
   constructor(filename){
     if(typeof filename!=='string'||!path.isAbsolute(filename)||filename===':memory:')
@@ -34,7 +42,7 @@ class BrokerSqliteStore {
           nonce TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
         );
       `);
-      this.db.prepare('PRAGMA quick_check').get();
+      assertDatabaseHealthy(this.db);
     }catch(e){this.db.close();throw e;}
   }
   transaction(fn){
@@ -83,4 +91,4 @@ class BrokerSqliteStore {
   }
   close(){this.db.close();}
 }
-module.exports={BrokerSqliteStore};
+module.exports={BrokerSqliteStore,assertDatabaseHealthy};
