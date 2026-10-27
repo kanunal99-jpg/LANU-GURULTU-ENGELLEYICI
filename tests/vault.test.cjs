@@ -179,3 +179,47 @@ test('a late decrypt cannot reopen the private vault after the user locks it',as
  await assert.rejects(pending,/Cancelled/);
  assert.equal(vault.key,null);assert.equal(vault.salt,null);assert.equal(vault.data,null);
 });
+
+test('PIN protected drafts are encrypted, survive restart and do not leak on lock',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);
+ await v.create('741963');
+ const id='a'.repeat(32),message={id,peer:'654321',text:'Şifreli özel mesaj',createdAt:1760000000000};
+ v.data.messages.push(message);
+ await v.write(v.data);
+ const raw=db.getItem('lens-vault-v1');
+ assert.equal(raw.includes(message.text),false);
+ assert.equal(raw.includes(message.peer),false);
+ v.lock();assert.equal(v.data,null);
+ const reopened=new LensVault(db,webcrypto);
+ await reopened.unlock('741963');
+ assert.deepEqual(reopened.data.messages,[message]);
+});
+test('invalid or oversized private messages cannot replace valid AES-GCM vault',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);await v.create('741963');
+ const original=db.getItem('lens-vault-v1');
+ const valid={id:'b'.repeat(32),peer:'654321',text:'test',createdAt:1760000000000};
+ const bad=[
+  [ {...valid,text:'x'.repeat(1001)} ],
+  [ {...valid,peer:'000000'} ],
+  [ {...valid,id:'abc'} ],
+  [ {...valid,createdAt:NaN} ],
+  [ {...valid,text:' '} ],
+  [valid,valid],
+  Array.from({length:81},(_,i)=>({...valid,id:i.toString(16).padStart(32,'0')})),
+  [{...valid,html:'<script>'}]
+ ];
+ for (const messages of bad) {
+  await assert.rejects(()=>v.write({...v.data,messages}),/şifreli mesaj|mesaj taslak/i);
+  assert.equal(db.getItem('lens-vault-v1'),original);
+ }
+});
+test('legacy PIN vaults with no messages field remain readable',async()=>{
+ const db=storage(),v=new LensVault(db,webcrypto);
+ await v.create('741963');
+ const original={contactsEnabled:true,contacts:[],incomingEnabled:false};
+ await v.write(original);v.lock();
+ const reopened=new LensVault(db,webcrypto);
+ await reopened.unlock('741963');
+ assert.equal(reopened.data.messages,undefined);
+ assert.deepEqual(reopened.data,original);
+});
