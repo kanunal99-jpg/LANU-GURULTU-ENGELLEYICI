@@ -27,7 +27,7 @@ echo 'Signer #1 certificate SHA-256 digest: ${'a'.repeat(64)}'
 echo "package: name='com.lanu.sesli' versionCode='120' versionName='2.0.8'"
 `,{mode:0o755});
     const env={...process.env,PATH:bin+':'+process.env.PATH,GH_TOKEN:'mock-secret',
-      GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',GITHUB_RUN_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.8',
+      GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',OTA_BUILD_NUMBER:'120',OTA_APK:apk,OTA_VERSION:'2.0.8',
       LANU_OTA_MANIFEST_URL:'https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json',
       LANU_RELEASE_CERT_SHA256:'a'.repeat(64),MOCK_CALLS:record};
     for(const [code,name] of [['403','Forbidden'],['500','Server Error'],['404','Not Found']]){
