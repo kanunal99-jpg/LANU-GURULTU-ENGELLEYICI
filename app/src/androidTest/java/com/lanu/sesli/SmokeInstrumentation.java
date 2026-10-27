@@ -5,6 +5,8 @@ import android.app.Instrumentation;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.view.MotionEvent;
 import android.view.InputDevice;
 import org.json.JSONArray;
@@ -35,7 +37,11 @@ public class SmokeInstrumentation extends Instrumentation {
                 if (loaded) break;
                 Thread.sleep(200);
             }
-            if (!loaded) throw new AssertionError("Bundled JavaScript did not start");
+            if (!loaded) throw new AssertionError("Bundled JavaScript did not start: "
+                + js(web,"JSON.stringify({ready:document.readyState,url:location.href,peer:typeof Peer,"
+                + "pause:typeof window.lanuPause,lens:typeof window.LanuLens,"
+                + "crypto:typeof window.crypto,agent:navigator.userAgent,"
+                + "scripts:Array.from(document.scripts).map(s=>[s.src,s.readyState])})"));
             verifyOtaDigestRejectsTampering(target);
             verifyPinnedSignerFailClosed();
             assertUpdaterGate(target, false, "Locked camera must block native OTA");
@@ -143,7 +149,7 @@ public class SmokeInstrumentation extends Instrumentation {
         if(LanuUpdater.matchesPinnedSigner(null,known)
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{},known)
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner,onlySigner},known)
-                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"0".repeat(64))
+                || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},new String(new char[64]).replace('\0','0'))
                 || LanuUpdater.matchesPinnedSigner(new android.content.pm.Signature[]{onlySigner},"invalid"))
             throw new AssertionError("Missing, altered or multiple installed signers accepted");
     }
@@ -176,17 +182,51 @@ public class SmokeInstrumentation extends Instrumentation {
         throw new AssertionError(label + " " + js(web,"JSON.stringify({trace:window.__entryTrace,gate:document.getElementById('gate').hidden,active:document.activeElement.id,viewport:[innerWidth,innerHeight],target:window.__entryTarget})"));
     }
     private void requireForegroundWindow(WebView web) throws Exception {
-        // Android 15 occasionally focuses system/IME windows just as a real
-        // touch begins. Sending an instrumentation event then raises
-        // "not directed at a window owned by uid". Never inject off-app.
+        // Never inject a gesture when another application owns the display.
         long deadline=SystemClock.uptimeMillis()+6000;
+        boolean collapsedSystemShade=false;
         while(SystemClock.uptimeMillis()<deadline){
+            // On the API29 emulator the WebView document can retain genuine
+            // focus while hasWindowFocus reports false following system/IME
+            // transition. Do not generate a new focus/blur pair every 120ms.
+            // The following shell gesture MUST still be observed as a real
+            // touchstart/pointerdown in the document or the test fails.
+            if(Build.VERSION.SDK_INT<=29){
+                AtomicReference<Boolean> visible=new AtomicReference<>(false);
+                runOnMainSync(()->visible.set(web.isShown() && web.getWindowToken()!=null));
+                if(Boolean.TRUE.equals(visible.get()) &&
+                        "true".equals(js(web,"document.hasFocus()")))return;
+            }
             AtomicReference<Boolean> ownsFocus=new AtomicReference<>(false);
-            runOnMainSync(()->ownsFocus.set(web.isShown() && web.hasWindowFocus()));
+            runOnMainSync(()->{
+                web.setFocusableInTouchMode(true);
+                web.requestFocus();
+                ownsFocus.set(web.isShown() && web.hasWindowFocus());
+            });
             if(Boolean.TRUE.equals(ownsFocus.get()))return;
-            SystemClock.sleep(100);
+            // API29 native shell gestures near the header can wake the OS
+            // notification shade. Collapse it once, never fake WebView input.
+            if(Build.VERSION.SDK_INT<=29 && !collapsedSystemShade) {
+                collapsedSystemShade=true;
+                shellCommand("cmd statusbar collapse");
+            }
+            SystemClock.sleep(120);
         }
-        throw new AssertionError("Android app window never regained focus for real touch smoke");
+        throw new AssertionError("Android app window never regained focus for real touch smoke: "
+            +js(web,"JSON.stringify({focus:document.hasFocus(),target:window.__entryTarget,"
+                    +"trace:window.__entryTrace,gate:document.getElementById('gate').hidden})")
+            +" Android focus="+shellCommand("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'"));
+    }
+    private String shellCommand(String command) throws Exception {
+        try(ParcelFileDescriptor.AutoCloseInputStream output=
+                new ParcelFileDescriptor.AutoCloseInputStream(
+                    getUiAutomation().executeShellCommand(command))){
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            byte[] chunk=new byte[256];int n;
+            while((n=output.read(chunk))!=-1 && bytes.size()<2048)
+                bytes.write(chunk,0,Math.min(n,2048-bytes.size()));
+            return bytes.toString("UTF-8");
+        }
     }
     private void hold(WebView web,String id,long duration,boolean jitter) throws Exception {
         requireForegroundWindow(web);
@@ -204,26 +244,84 @@ public class SmokeInstrumentation extends Instrumentation {
         // Calibrate CSS-to-screen offsets using a real short touch. WebView
         // padding/insets differ across Android versions and must not turn a
         // correct gesture into a tap below the small header emblem.
-        requireForegroundWindow(web);
-        long probe=SystemClock.uptimeMillis();
-        pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(50);
-        pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);waitForIdleSync();
-        JSONArray observed=new JSONArray(js(web,"(()=>{const t=window.__entryTrace.find(e=>e.type==='touchstart');return t&&t.touches?t.touches[0]:null;})()"));
+        // Android 10 AOSP may temporarily focus a system window after
+        // instrumentation/IME activity. A successful OS injection does NOT
+        // mean the WebView received the event. Retry only real OS touches,
+        // with explicit native focus reacquisition, never synthetic JS.
+        String observedJson="null";
+        for(int attempt=0;attempt<4;attempt++){
+            runOnMainSync(()->{
+                web.setFocusableInTouchMode(true);
+                web.requestFocus();
+                web.requestFocusFromTouch();
+            });
+            requireForegroundWindow(web);
+            SystemClock.sleep(150+attempt*250);
+            js(web,"window.__entryTrace=[]");
+            long probe=SystemClock.uptimeMillis();
+            if(Build.VERSION.SDK_INT<=29) {
+                // Android 10 may reject UiAutomation.injectInputEvent despite a
+                // focused app window. The shell's native input command still
+                // delivers real OS touch events; never synthesize DOM events.
+                shellTouch(point[0],point[1],point[0],point[1],75);
+            }else{
+                pointer(probe,MotionEvent.ACTION_DOWN,point[0],point[1]);SystemClock.sleep(75);
+                pointer(probe,MotionEvent.ACTION_UP,point[0],point[1]);
+            }
+            waitForIdleSync();
+            observedJson=js(web,"(()=>{const events=window.__entryTrace||[];"
+                    +"const t=events.find(e=>e.type==='touchstart'&&e.touches&&e.touches.length);"
+                    +"if(t)return t.touches[0];"
+                    +"const p=events.find(e=>e.type==='pointerdown');return p?[p.x,p.y]:null;})()");
+            if(observedJson!=null && !"null".equals(observedJson))break;
+        }
+        // Chrome 74 can expose native POINTER events without a touchstart.
+        // Calibrate against whichever real OS event actually reached WebView;
+        // never continue on null or manufacture a DOM touch.
+        if(observedJson==null || "null".equals(observedJson))
+            throw new AssertionError("Real Android touch calibration failed: "
+                    + js(web,"JSON.stringify({focus:document.hasFocus(),trace:window.__entryTrace,"
+                    +"target:window.__entryTarget,viewport:[innerWidth,innerHeight]})"));
+        JSONArray observed=new JSONArray(observedJson);
         point[0]+=(bounds.optDouble(0)-observed.optDouble(0))*point[2];
         point[1]+=(bounds.optDouble(1)-observed.optDouble(1))*point[2];
         js(web,"window.__entryTrace=[]");
         requireForegroundWindow(web);
         long down=SystemClock.uptimeMillis();
-        pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
-        if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}
-        else SystemClock.sleep(duration);
-        pointer(down,MotionEvent.ACTION_UP,point[0],point[1]);
+        if(Build.VERSION.SDK_INT<=29){
+            shellTouch(point[0],point[1],jitter?point[0]+3*point[2]:point[0],
+                    jitter?point[1]+2*point[2]:point[1],duration);
+        }else{
+            pointer(down,MotionEvent.ACTION_DOWN,point[0],point[1]);
+            if(jitter){SystemClock.sleep(250);pointer(down,MotionEvent.ACTION_MOVE,point[0]+3*point[2],point[1]+2*point[2]);SystemClock.sleep(Math.max(0,duration-250));}
+            else SystemClock.sleep(duration);
+            pointer(down,MotionEvent.ACTION_UP,point[0],point[1]);
+        }
         waitForIdleSync();
+    }
+    private void shellTouch(float x0,float y0,float x1,float y1,long duration) throws Exception {
+        // The input touchscreen swipe command runs as Android's shell UID.
+        // Events reach the OS input dispatcher and the actual WebView.
+        // Reading the command's stdout until EOF waits for gesture completion.
+        String command="input touchscreen swipe "+Math.round(x0)+" "+Math.round(y0)
+                +" "+Math.round(x1)+" "+Math.round(y1)+" "+Math.max(1,duration);
+        try(ParcelFileDescriptor.AutoCloseInputStream output=
+                new ParcelFileDescriptor.AutoCloseInputStream(
+                    getUiAutomation().executeShellCommand(command))){
+            byte[] discard=new byte[256];
+            while(output.read(discard)!=-1) { /* no user data */ }
+        }
     }
     private void pointer(long down,int action,float x,float y) {
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-        try{sendPointerSync(event);}finally{event.recycle();}
+        try{
+            // Instrumentation.sendPointerSync can cross the Android 10 UID
+            // boundary and throw INJECT_EVENTS. UiAutomation is Android's
+            // sanctioned OS-level automation channel; not a DOM fake.
+            if(!getUiAutomation().injectInputEvent(event,true))
+                throw new AssertionError("Android denied real touch input");
+        }finally{event.recycle();}
     }
     private String js(WebView view, String expression) throws Exception {
         CountDownLatch done = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();
