@@ -66,3 +66,14 @@ test('WebRTC test WebSocket dependency uses a patched and integrity-pinned tarba
   assert.match(ws.integrity,/^sha512-[A-Za-z0-9+/]+={0,2}$/);
   assert.match(workflow,/npm audit --audit-level=high --no-fund/);
 });
+
+test('combined WebRTC camera and microphone permissions remain strictly PIN gated',()=>{
+ assert.match(java,/VIDEO_CALL_CAPTURE\s*=\s*17/);
+ assert.match(java,/if \(microphone && !privateUnlocked\) \{ request\.deny\(\); return; \}/);
+ assert.match(java,/if \(camera && microphone\) \{/);
+ assert.match(java,/if \(!privateUnlocked\) \{ request\.deny\(\); return; \}/);
+ assert.match(java,/results\.length == 2/);
+ assert.match(java,/pendingVideoCall = null/);
+ assert.match(java,/PermissionRequest\.RESOURCE_VIDEO_CAPTURE, PermissionRequest\.RESOURCE_AUDIO_CAPTURE/);
+ assert.match(java,/if \(pendingCamera != null \|\| pendingMicrophone != null \|\| pendingVideoCall != null\)/);
+});
