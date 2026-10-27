@@ -47,10 +47,25 @@
     // This badge is never visible on the public-facing camera screen.
     $('updatesTab').textContent=(event.state==='available'||event.state==='ready')?'Güncelleme var':'Güncelleme Kontrol';
     $('installedVersion').textContent = (event.version || 'bilinmiyor') + ' (kod ' + (event.versionCode || '?') + ')';
+    const hasNew = typeof event.availableVersion === 'string' && /^\d+\.\d+\.\d+$/.test(event.availableVersion);
+    $('availableVersion').textContent = hasNew
+      ? event.availableVersion + ' (kod ' + (event.availableVersionCode || '?') + ')'
+      : event.state === 'current' ? 'Güncel' : event.configured === false ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
     $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
+    const downloading = event.state === 'downloading' || event.state === 'cancelling';
+    $('updateProgressBox').hidden = !downloading;
+    if(downloading) {
+      const n = Number(event.progressPercent);
+      const percent=Number.isFinite(n)?Math.max(0,Math.min(100,Math.round(n))):0;
+      $('updateProgress').value=percent;
+      $('updateProgressLabel').textContent = event.state === 'cancelling'
+        ? 'İndirme durduruluyor…'
+        : 'APK indiriliyor: %' + percent;
+    }
+    $('cancelUpdate').disabled = event.state === 'cancelling';
     $('downloadUpdate').hidden = event.state !== 'available';
     $('installUpdate').hidden = event.state !== 'ready' && event.state !== 'permission' && event.state !== 'installing';
-    const busy = ['checking','downloading','verifying','installing'].includes(event.state);
+    const busy = ['checking','downloading','cancelling','verifying','installing'].includes(event.state);
     $('checkUpdates').disabled = busy;
     $('downloadUpdate').disabled = busy;
     $('installUpdate').disabled = busy;
@@ -167,7 +182,9 @@
     $('callsTab').tabIndex=0;$('updatesTab').tabIndex=$('diagnosticsTab').tabIndex=-1;
     $('updatesTab').textContent='Güncelleme Kontrol';
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
-    $('downloadUpdate').hidden=$('installUpdate').hidden=true;
+    $('downloadUpdate').hidden=$('installUpdate').hidden=$('updateProgressBox').hidden=true;
+    $('availableVersion').textContent='Henüz denetlenmedi';
+    $('updateStatus').textContent='Güvenli sürüm bilgileri kontrol edilecek.';
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
     $('contactList').replaceChildren();$('draftList').replaceChildren();
@@ -359,7 +376,7 @@
   $('checkUpdates').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.check();});
   $('downloadUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.downloadAndInstall();});
   $('installUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.install();});
-  $('updateReleases').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.releases();});
+  $('cancelUpdate').addEventListener('click',()=>{if(opened&&window.LanuUpdate)window.LanuUpdate.cancelDownload();});
   $('lockBtn').addEventListener('click',()=>lock());$('changePin').addEventListener('click',()=>gate(true));
   $('changeCode').addEventListener('click',()=>{if(opened)$('codeChangeConfirm').hidden=false;});
   $('codeChangeCancel').addEventListener('click',()=>$('codeChangeConfirm').hidden=true);

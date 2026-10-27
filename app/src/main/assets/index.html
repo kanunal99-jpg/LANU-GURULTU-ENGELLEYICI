@@ -97,15 +97,24 @@
     <p class="hint footer">İki kişi de uygulamayı açmalı. İnternet gerekir; normal telefon numaraları aranmaz. Arka plana geçmek görüşmeyi kapatır. Ses kaydı tutulmaz.</p>
     </div>
     <section id="updatesPane" role="tabpanel" class="card" hidden aria-labelledby="updatesTab" tabindex="0">
-      <h2 id="updateTitle">Güncelleme Kontrol</h2>
-      <p class="hint">Kurulu sürüm: <strong id="installedVersion">Kontrol ediliyor…</strong></p>
-      <p id="updateStatus" class="hint" role="status" aria-live="polite">Yeni sürümleri buradan denetleyebilirsin.</p>
-      <button id="checkUpdates" type="button">Güncelleme denetle</button>
+      <h2 id="updateTitle">Uygulama Güncellemeleri</h2>
+      <p class="hint">Uygulamadan çıkmadan kurulu ve yayınlanan yeni sürümleri buradan yönetebilirsin.</p>
+      <div class="version-comparison" aria-label="Sürüm karşılaştırması">
+        <div class="version-tile"><span>Kurulu sürüm</span><strong id="installedVersion">Kontrol ediliyor…</strong></div>
+        <div class="version-tile"><span>Yeni sürüm</span><strong id="availableVersion">Henüz denetlenmedi</strong></div>
+      </div>
+      <p id="updateStatus" class="hint" role="status" aria-live="polite">Güvenli sürüm bilgileri kontrol edilecek.</p>
+      <div id="updateProgressBox" hidden>
+        <label for="updateProgress" id="updateProgressLabel">Güncelleme indiriliyor…</label>
+        <progress id="updateProgress" max="100" value="0"></progress>
+        <button id="cancelUpdate" type="button" class="secondary">İndirmeyi iptal et</button>
+      </div>
+      <button id="checkUpdates" type="button" class="secondary">Güncellemeyi kontrol et</button>
       <button id="downloadUpdate" type="button" class="green" hidden>Yeni sürümü indir ve güncelle</button>
-      <button id="installUpdate" type="button" class="green" hidden>Güncellemeyi kur</button>
-      <button id="updateReleases" class="secondary" type="button">GitHub sürümlerini aç</button>
+      <button id="installUpdate" type="button" class="green" hidden>Android üzerinden güncellemeyi tamamla</button>
+      <p class="hint">Sürüm ve indirme işlemleri bu ekrandadır; depo veya tarayıcı açılmaz. Kurulum sırasında Android güvenlik onayı gösterilir. Mevcut uygulamayı silme gerekmez; aynı imza zorunludur.</p>
       <h2>Şifreli veri yedeği</h2>
-      <p class="hint">Farklı imzalı APK'ya geçişten önce rehberini, mevcut PIN kasanı ve 6 haneli kodunu şifreli olarak dışa aktar. Yedek parolasını ve eski PIN'ini unutma. Cihaz anahtarları dışa aktarılmaz.</p>
+      <p class="hint">İmza değişikliğiyle ilgili olası bir sorunda rehberini, mevcut PIN kasanı ve 6 haneli kodunu şifreli olarak dışa aktar. Yedek parolasını ve eski PIN'ini unutma. Cihaz anahtarları dışa aktarılmaz.</p>
       <label for="exportPin">Mevcut PIN</label>
       <input id="exportPin" type="password" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="6–12 haneli PIN">
       <label for="exportPassphrase">Ayrı yedek dosyası parolası</label>
@@ -115,7 +124,7 @@
       <button id="exportBackup" type="button" class="secondary">Şifreli yedek dosyası oluştur</button>
       <p id="exportStatus" class="hint" role="status" aria-live="polite">Yalnızca kullanıcı seçtiği konuma kaydedilir. Silmeden önce dosyanın kaydedildiğini doğrula.</p>
       <p class="hint">APK önce SHA-256 ve aynı uygulama imzasıyla doğrulanır. Android, kurulumu onaylamanı isteyecektir. Bu sayfa PIN korumalıdır.</p>
-      <p class="hint">Özel GitHub sürümleri otomatik indirilemez. OTA için ayrı bir herkese açık APK dağıtım adresi ve sürümler boyunca değişmeyen imzalama anahtarı gereklidir. Kaynak kodu özel kalabilir.</p>
+      <p class="hint">Sürüm denetimi için APK dağıtım kaynağı ve önceki kurulumla aynı kalıcı imzalama sertifikası gerekir. Bu gereklilikler karşılanmazsa verilerini korumak için güncelleme durdurulur.</p>
     </section>
     <section id="diagnosticsPane" role="tabpanel" class="card" hidden aria-labelledby="diagnosticsTab" tabindex="0">
       <h2>Sistem Tanılama</h2>

@@ -86,14 +86,14 @@ test('installer re-verifies the on-disk APK when the user taps install',()=>{
   assert.ok(java.indexOf('validatePackage(file,candidate.code,candidate.version)')<java.indexOf('openInstallerAfterValidation();'));
   assert.match(java,/verified!=file/);
   assert.match(java,/busy=true;\s*emit\("verifying"/);
-  assert.match(lens,/\['checking','downloading','verifying','installing'\]\.includes/);
+  assert.match(lens,/\['checking','downloading','cancelling','verifying','installing'\]\.includes/);
 });
 test('interrupted downloads preserve earlier valid build and isolate temp names',()=>{
   assert.match(java,/"lanu-lens-"\+next\.code\+"\.apk"/);
   assert.match(java,/"download-"\+next\.code\+"\.tmp"/);
   assert.doesNotMatch(java,/tmp\.delete\(\);dest\.delete\(\);/);
   assert.match(java,/if\(readyForInstall\(\)\)\s*\{/);
-  assert.match(java,/if\(Thread\.currentThread\(\)\.isInterrupted\(\)\)/);
+  assert.match(java,/if\(cancelRequested \|\| Thread\.currentThread\(\)\.isInterrupted\(\)\)/);
 });
 
 test('native update bridge revokes authorization on PIN lock, background and page navigation',()=>{

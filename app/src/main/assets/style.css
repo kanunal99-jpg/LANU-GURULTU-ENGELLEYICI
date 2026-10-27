@@ -97,3 +97,36 @@ body {max-width:none;padding:0;background:#101217}button {cursor:pointer}input[t
 @media (prefers-reduced-motion:reduce) {
   #callsPane .card {transition:none;}
 }
+
+/* PIN-only OTA version center. Never visible from decoy camera surface. */
+#updatesPane .version-comparison {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0;
+}
+#updatesPane .version-tile {
+  display:flex;flex-direction:column;gap:12px;min-width:0;
+  border-radius:16px;border:1px solid #365c55;background:linear-gradient(160deg,#192e2a,#172128);
+  padding:16px 12px;
+}
+#updatesPane .version-tile span {
+  font-size:12px;letter-spacing:.05em;color:#accfc3;
+}
+#updatesPane .version-tile strong {
+  font-size:16px;overflow-wrap:anywhere;color:#e1f9f1;line-height:1.4;
+}
+#updatesPane #updateProgressBox {
+  margin:20px 0;padding:14px;border-radius:14px;
+  border:1px solid #4b7067;background:#162b29;
+}
+#updatesPane #updateProgressLabel {
+  display:block;margin:0 0 10px;color:#bce8dc;font-size:13px;
+}
+#updatesPane #updateProgress {
+  width:100%;height:14px;display:block;accent-color:#74d8b6;
+}
+#updatesPane #cancelUpdate {margin-top:12px;}
+#updatesPane button {min-height:48px;}
+@media(max-width:360px) {
+  #updatesPane .version-comparison {gap:7px;}
+  #updatesPane .version-tile {padding:12px 9px;}
+  #updatesPane .version-tile strong {font-size:13px;}
+}
