@@ -201,14 +201,15 @@ jobs:
           verified=false
           for attempt in 1 2 3 4 5; do
             mkdir -p "$RUNNER_TEMP/lanu-release-readback"
-            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v2.0.10-build${GITHUB_RUN_NUMBER}" > "$RUNNER_TEMP/lanu-release.json" &&
+            # GitHub's by-tag release endpoint returns HTTP 404 for an
+            # unpublished DRAFT. Resolve it from the authenticated owner index
+            # while preserving the private draft until all remote bytes match.
+            if gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/lanu-releases.json" &&
+               jq -er --arg tag "v2.0.10-build${GITHUB_RUN_NUMBER}"                  '[.[] | select(.tag_name==$tag and .draft==true)] |
+                  if length==1 then .[0] else error("Expected exactly one draft release") end'                  "$RUNNER_TEMP/lanu-releases.json" > "$RUNNER_TEMP/lanu-release.json" &&
                node scripts/verify-release-evidence.cjs "$RUNNER_TEMP/lanu-release.json" dist "$GITHUB_SHA" &&
-               gh release download "v2.0.10-build${GITHUB_RUN_NUMBER}" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/lanu-release-readback" --clobber &&
-               cmp dist/Lanu-Lens-2.0.10.apk "$RUNNER_TEMP/lanu-release-readback/Lanu-Lens-2.0.10.apk" &&
-               cmp dist/SHA256SUMS.txt "$RUNNER_TEMP/lanu-release-readback/SHA256SUMS.txt" &&
-               cmp dist/APK-BILGILERI.txt "$RUNNER_TEMP/lanu-release-readback/APK-BILGILERI.txt" &&
-               cmp dist/APK-IMZA-DURUMU.txt "$RUNNER_TEMP/lanu-release-readback/APK-IMZA-DURUMU.txt"; then
-              (cd "$RUNNER_TEMP/lanu-release-readback" && sha256sum -c SHA256SUMS.txt)
+               bash scripts/verify-draft-release-assets.sh "$RUNNER_TEMP/lanu-release.json" dist "$RUNNER_TEMP/lanu-release-readback" "$GITHUB_REPOSITORY"; then
+              echo "Release draft assets were remotely retrieved and verified."
               verified=true
               break
             fi
@@ -227,7 +228,9 @@ jobs:
         run: |
           # Keep the release invisible until remote asset readback and SHA-256 pass.
           # A debug-signed APK is always labeled as a non-production prerelease.
-          gh release edit "v2.0.10-build${GITHUB_RUN_NUMBER}" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          release_id="$(jq -er '.id|select(type=="number" and .>0)' "$RUNNER_TEMP/lanu-release.json")"
+          # Publish only the exact numeric draft ID already read back.
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false -F prerelease=true --jq '.draft' | grep -x false
 
       - name: OTA herkese açık sadece-APK dağıtımı
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signing.outputs.signed == 'true'
