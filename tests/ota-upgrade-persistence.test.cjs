@@ -29,13 +29,15 @@ test('Android package replacement preserves PIN encrypted vault, draft and nativ
  assert.match(runner,/instrument verify/);
  assert.match(runner,/ro\.kernel\.qemu/);
  assert.match(runner,/LANU_DISPOSABLE_CI_EMULATOR/);
- assert.doesNotMatch(runner,/adb\s+uninstall|pm\s+clear|\sinstall\s+-[a-z]*d\b/);
+ const commands=runner.split('\n').filter(line=>!/^\s*#/.test(line)).join('\n');
+ assert.doesNotMatch(commands,/adb\s+uninstall|pm\s+clear|\sinstall\s+-[a-z]*d\b/);
  assert.match(instrument,/otaUpgradePhase/);
  assert.match(instrument,/getSharedPreferences\("lanu-ota-ci-upgrade"/);
  assert.match(instrument,/localStorage\.getItem\('lens-vault-v1'\)/);
  assert.match(instrument,/draftList/);
  assert.match(instrument,/pinConfirm'\)\.hidden/);
  assert.match(instrument,/Original PIN decrypts original draft after same-key upgrade/);
+ assert.match(instrument,/openOtaPinGate\(web\)/);
 });
 test('upgrade CI is separate from production release and Android 10 and 15 smoke',()=>{
  assert.match(workflow,/ota-upgrade-android15:/);
