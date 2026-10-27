@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#101217"><title>Lanu Lens</title>
   <link rel="icon" href="lens.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
-  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="encrypted-transfer.js"></script><script defer src="diagnostics.js"></script><script defer src="auth-protocol.js"></script><script defer src="auth-keystore.js"></script><script defer src="broker-client.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
+  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="encrypted-transfer.js"></script><script defer src="diagnostics.js"></script><script defer src="auth-protocol.js"></script><script defer src="auth-keystore.js"></script><script defer src="broker-client.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="audio-policy.js"></script><script defer src="app.js"></script>
 </head>
 <body>
   <main id="cameraView" class="camera-shell">
@@ -50,6 +50,7 @@
       <div id="videoPanel" class="video-panel" hidden aria-label="Görüntülü görüşme">
         <video id="remoteVideo" autoplay playsinline muted aria-label="Karşı tarafın görüntüsü"></video>
         <video id="localVideo" autoplay playsinline muted aria-label="Kendi kamera önizlemen"></video>
+        <button id="stopVideo" class="secondary" type="button" hidden>Kameramı kapat, ses devam etsin</button>
         <p id="videoStatus" class="hint" role="status" aria-live="polite"></p>
       </div>
       <button id="answerBtn" class="green" hidden>Gelen aramayı cevapla</button>
@@ -64,10 +65,11 @@
         <option value="balanced">Dengeli</option>
         <option value="noisy">Gürültülü ortam</option>
         <option value="natural">Doğal ses</option>
+        <option value="custom" disabled>Özel ayarlar</option>
       </select>
       <label class="row" for="ns"><span>Gürültü azaltma</span><input type="checkbox" id="ns" checked></label>
       <label class="row" for="ec"><span>Yankı önleme</span><input type="checkbox" id="ec" checked></label>
-      <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc" checked></label>
+      <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc"></label>
       <label class="row" for="speaker"><span>Hoparlör</span><input type="checkbox" id="speaker"></label>
       <button id="btBtn" class="secondary">Bluetooth kulaklığa izin ver</button>
       <p id="filterStatus" class="hint">Filtreler mikrofonundan karşıya giden sese uygulanır. Sonuç cihazın WebView desteğine bağlıdır.</p>
@@ -82,12 +84,16 @@
     </section>
     <section class="card" id="privateDrafts">
       <h2>PIN korumalı mesaj taslakları</h2>
-      <p class="hint">Taslaklar yalnız bu cihazda PIN kasasının içinde şifreli tutulur. Henüz karşı tarafa gönderilmez; güvenilir kimlik doğrulama olmadan mesaj aktarımı açılmaz.</p>
+      <p class="hint">Taslaklar yalnız bu cihazda PIN kasasının içinde şifreli tutulur. Mesajlar henüz karşı tarafa gönderilmez; altı haneli kod güvenilir kimlik doğrulama değildir.</p>
+      <label class="label" for="draftSearch">Taslaklarda ara</label>
+      <input id="draftSearch" type="search" maxlength="80" autocomplete="off" placeholder="Alıcı kodu veya mesaj metni">
+      <p id="draftCount" class="hint" aria-live="polite"></p>
       <label for="draftPeer" class="label">Alıcının görüşme kodu</label>
       <input id="draftPeer" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 haneli kod">
       <label for="draftText" class="label">Mesaj taslağı</label>
       <textarea id="draftText" maxlength="1000" rows="3" autocomplete="off" placeholder="Şifreli, yalnız bu cihazda saklanır"></textarea>
       <button id="saveDraft" type="button" class="secondary">Şifreli taslak kaydet</button>
+      <button id="cancelDraftEdit" type="button" class="secondary" hidden>Düzenlemeyi iptal et</button>
       <p id="draftStatus" class="hint" role="status" aria-live="polite"></p>
       <div id="draftList" class="draft-list" aria-label="Şifreli mesaj taslakları"></div>
     </section>

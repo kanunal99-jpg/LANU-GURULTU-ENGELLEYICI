@@ -60,9 +60,16 @@
     if (state !== 'dialing') { ringback = false; native('setRingback', false); }
     if (window.LanuLens) window.LanuLens.callState(state);
   }
+  const audioChoices = () => ({ns:$('ns').checked,ec:$('ec').checked,agc:$('agc').checked});
+  function supportedAudio() {
+    if(window.LanuAudioPolicy) return window.LanuAudioPolicy.capabilities(navigator.mediaDevices);
+    try{return navigator.mediaDevices.getSupportedConstraints
+      ? navigator.mediaDevices.getSupportedConstraints():{};}catch(_){return {};}
+  }
   function constraints() {
-    const supported = navigator.mediaDevices.getSupportedConstraints
-      ? navigator.mediaDevices.getSupportedConstraints() : {};
+    const supported=supportedAudio();
+    if(window.LanuAudioPolicy)
+      return {audio:window.LanuAudioPolicy.request(supported,audioChoices()),video:false};
     const audio = {};
     [['ns', 'noiseSuppression'], ['ec', 'echoCancellation'], ['agc', 'autoGainControl']].forEach(([id, key]) => {
       if (supported[key]) audio[key] = $(id).checked;
@@ -72,7 +79,12 @@
   function filters() {
     const track = stream && stream.getAudioTracks()[0];
     if (!track) return;
-    const settings = track.getSettings ? track.getSettings() : {};
+    let settings={};
+    try{settings=track.getSettings?track.getSettings():{};}catch(_){}
+    if(window.LanuAudioPolicy) {
+      $('filterStatus').textContent=window.LanuAudioPolicy.status(supportedAudio(),settings,audioChoices());
+      return;
+    }
     const text = [['Gürültü', 'noiseSuppression'], ['Yankı', 'echoCancellation'], ['Denge', 'autoGainControl']]
       .map(([label, key]) => label + ': ' + (settings[key] === true ? 'açık' : settings[key] === false ? 'kapalı' : 'destek bildirilmedi'));
     $('filterStatus').textContent = text.join(' · ');
@@ -114,11 +126,15 @@
     if (videoTracks.length && videoTracks.some(track => track.readyState !== 'ended')) {
       $('videoPanel').hidden = false;
       $('localVideo').srcObject = result;
+      $('stopVideo').hidden = false;
       $('videoStatus').textContent = 'Görüntü bu görüşme için açık. Kamera kapatılırsa ses devam eder.';
       videoTracks.forEach(track => track.addEventListener('ended', () => {
         if (stream === result) {
           $('localVideo').srcObject = null;
+          $('stopVideo').hidden = true;
+          if (!$('remoteVideo').srcObject) $('videoPanel').hidden = true;
           $('videoStatus').textContent = 'Kamera durdu; görüşme sesli devam ediyor.';
+          say('Kamera durdu; sesli görüşme sürüyor.');
         }
       }));
       try {
@@ -152,7 +168,10 @@
     call = null; stream = null; state = 'idle'; muted = false;
     if (notify && oldCall) control(oldCall, 'hangup');
     if (oldCall) { try { oldCall.close(); } catch (_) { log('Call close failed'); } }
-    if (oldStream) oldStream.getTracks().forEach(track => track.stop());
+    if (oldStream) oldStream.getTracks().forEach(track => {
+      try { track.enabled = false; track.stop(); }
+      catch (_) { log('Media track could not stop; restart the app to release capture'); }
+    });
     // A WebView media element can throw during teardown after its backing
     // playback component is disposed. Always finish releasing the call UI.
     try { $('remote').pause(); } catch (_) { log('Remote media pause failed during cleanup'); }
@@ -162,6 +181,7 @@
       try { $(id).pause(); $(id).srcObject = null; } catch (_) { log('Video preview cleanup failed'); }
     }
     $('videoPanel').hidden = true; $('videoStatus').textContent = '';
+    $('stopVideo').hidden = true;
     callWantsVideo = false;
     native('setCallActive', false); ui(); say(message || 'Hazır.');
   }
@@ -266,6 +286,7 @@
         incomingVideo.forEach(track => track.addEventListener('ended', () => {
           if (call === connection && token === epoch) {
             $('remoteVideo').srcObject = null;
+            if (!$('localVideo').srcObject) $('videoPanel').hidden = true;
             $('videoStatus').textContent = 'Karşı tarafın kamerası kapandı; ses devam ediyor.';
           }
         }));
@@ -511,34 +532,63 @@
   $('videoEnabled').addEventListener('change', () => {
     if (state === 'idle') ui();
   });
+  $('stopVideo').addEventListener('click', () => {
+    // One-way privacy operation: restarting camera requires a new consented call.
+    // Stop only video tracks. Never disable the microphone or end the call.
+    if (!stream || state === 'idle' || paused || (window.LanuLens && !window.LanuLens.isOpen())) return;
+    const activeVideo = typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
+    for (const track of activeVideo) {
+      try { track.enabled = false; track.stop(); }
+      catch (_) { log('Camera teardown failed; ending the call to protect privacy'); endCall('Kamera kapatılamadı. Gizliliğin için uygulamayı kapatıp yeniden aç.'); return; }
+    }
+    $('localVideo').srcObject = null;
+    $('stopVideo').hidden = true;
+    if (!$('remoteVideo').srcObject) $('videoPanel').hidden = true;
+    $('videoStatus').textContent = 'Kamera kapalı; yalnızca mikrofon görüşmeye devam ediyor.';
+    say('Kameran kapatıldı; sesli görüşme sürüyor.');
+  });
   $('noisePreset').addEventListener('change', async () => {
-    const values = {
+    const values = window.LanuAudioPolicy ? window.LanuAudioPolicy.presets : {
       balanced: {ns:true, ec:true, agc:false},
       noisy: {ns:true, ec:true, agc:true},
       natural: {ns:false, ec:true, agc:false}
     };
     const profile = values[$('noisePreset').value];
     if (!profile) return;
+    safeSet('lanu-noise-preset',$('noisePreset').value);
     for (const key of ['ns','ec','agc']) {
       $(key).checked = profile[key];
       safeSet('lanu-' + key, String(profile[key]));
     }
     const track = stream && stream.getAudioTracks()[0], token = epoch;
     if (track) {
-      try { await track.applyConstraints(constraints().audio); if (token === epoch) filters(); }
+      try { await track.applyConstraints(window.LanuAudioPolicy
+        ? window.LanuAudioPolicy.live(supportedAudio(),audioChoices())
+        : (constraints().audio===true?{}:constraints().audio)); if (token === epoch) filters(); }
       catch (_) { if (token === epoch) say('Bu cihaz ses profilini canlı uygulayamadı. Sonraki aramada yeniden denenecek.'); }
     } else filters();
   });
   ['ns', 'ec', 'agc'].forEach(id => {
-    const saved = safeGet('lanu-' + id); if (saved !== null) $(id).checked = saved === 'true';
+    const saved = safeGet('lanu-' + id);
+    if (saved !== null) $(id).checked = saved === 'true';
+    else if (id==='agc') $(id).checked = false;
     $(id).addEventListener('change', async () => {
       safeSet('lanu-' + id, String($(id).checked));
+      const currentProfile=window.LanuAudioPolicy
+        ? window.LanuAudioPolicy.matched(audioChoices()) : 'custom';
+      $('noisePreset').value=currentProfile;
+      safeSet('lanu-noise-preset',currentProfile);
       const track = stream && stream.getAudioTracks()[0], token = epoch;
       if (!track) return;
-      try { await track.applyConstraints(constraints().audio); if (token === epoch) filters(); }
+      try { await track.applyConstraints(window.LanuAudioPolicy
+        ? window.LanuAudioPolicy.live(supportedAudio(),audioChoices())
+        : (constraints().audio===true?{}:constraints().audio)); if (token === epoch) filters(); }
       catch (_) { if (token === epoch) say('Bu cihaz ayarı canlı değiştiremiyor. Değişiklik sonraki aramada denenecek.'); }
     });
   });
+  if(window.LanuAudioPolicy) {
+    $('noisePreset').value=window.LanuAudioPolicy.matched(audioChoices());
+  }
   $('callBtn').addEventListener('click', dial);
   $('answerBtn').addEventListener('click', answer);
   $('hangBtn').addEventListener('click', () => endCall('Arama kapatıldı.'));

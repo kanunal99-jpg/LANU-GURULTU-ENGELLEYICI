@@ -5,7 +5,7 @@
   let entries = [];
   let camera = null, captureEpoch = 0, facing = 'environment', torch = false, seconds = 0, timer = null, photo = '';
   let incomingPair = null, writes = Promise.resolve(), lastCallState = 'idle';
-  let pendingEncryptedBackup = null;
+  let pendingEncryptedBackup = null, editingDraftId = null;
   const message = text => { $('cameraStatus').textContent = text; };
   let allowIncoming=false,suspended=document.hidden;
   try{allowIncoming=localStorage.getItem('lens-listen')==='true'&&localStorage.getItem('lens-vault-v1')!==null;}catch(_){}
@@ -188,7 +188,9 @@
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
     $('contactList').replaceChildren();$('draftList').replaceChildren();
-    $('draftPeer').value=$('draftText').value='';$('draftStatus').textContent='';
+    $('draftPeer').value=$('draftText').value=$('draftSearch').value='';
+    editingDraftId=null;$('saveDraft').textContent='Şifreli taslak kaydet';$('cancelDraftEdit').hidden=true;
+    $('draftCount').textContent='';$('draftStatus').textContent='';
     $('contactName').value=$('partner').value=$('pairCode').value='';
     $('pairRequest').hidden=true;$('pairStatus').textContent='';$('myid').textContent='······';
     stopCamera();window.scrollTo(0,0);message('Fotoğraf çekmek için kamerayı aç.');
@@ -203,20 +205,49 @@
     };
     writes=writes.then(operation,operation);return writes;
   }
+  function resetDraftEditor() {
+    editingDraftId=null;$('draftPeer').value=$('draftText').value='';
+    $('saveDraft').textContent='Şifreli taslak kaydet';$('cancelDraftEdit').hidden=true;
+  }
   function renderDrafts() {
     const list=$('draftList');list.replaceChildren();
+    $('draftCount').textContent='';
     if(!opened||!vault||!vault.data)return;
-    const drafts=Array.isArray(vault.data.messages)?vault.data.messages:[];
+    const all=Array.isArray(vault.data.messages)?vault.data.messages:[];
+    const query=$('draftSearch').value.trim().slice(0,80).toLocaleLowerCase('tr');
+    const drafts=all.filter(draft=>!query ||
+      draft.peer.includes(query) || draft.text.toLocaleLowerCase('tr').includes(query))
+      .slice().sort((a,b)=>b.createdAt-a.createdAt);
+    $('draftCount').textContent=drafts.length+' / '+all.length+' şifreli taslak';
     for (const draft of drafts) {
       const row=document.createElement('article');row.className='draft-item';
       const heading=document.createElement('strong');heading.textContent='Kod: '+draft.peer;
       const body=document.createElement('p');body.textContent=draft.text;
+      const edit=document.createElement('button');
+      edit.type='button';edit.className='secondary';edit.textContent='Düzenle';
+      edit.addEventListener('click',()=>{
+        if(!opened||!vault||!vault.data||document.hidden)return;
+        if(!vault.data.messages.some(item=>item.id===draft.id))return;
+        editingDraftId=draft.id;
+        $('draftPeer').value=draft.peer;$('draftText').value=draft.text;
+        $('saveDraft').textContent='Şifreli taslağı güncelle';
+        $('cancelDraftEdit').hidden=false;
+        $('draftStatus').textContent='Taslak düzenleniyor; kaydettiğinde eski şifreli içerik yenilenir.';
+        $('draftText').focus();
+      });
       const remove=document.createElement('button');
       remove.type='button';remove.className='secondary';remove.textContent='Taslağı sil';
-      remove.addEventListener('click',()=>persist(data=>{
-        data.messages=(data.messages||[]).filter(item=>item.id!==draft.id);
-      }).then(ok=>{$('draftStatus').textContent=ok?'Taslak şifreli kasadan silindi.':'Taslak silinemedi.';}));
-      row.append(heading,body,remove);list.append(row);
+      remove.addEventListener('click',()=>{
+        if(!opened||document.hidden)return;
+        persist(data=>{
+          data.messages=(data.messages||[]).filter(item=>item.id!==draft.id);
+        }).then(ok=>{
+          if(!opened)return;
+          if(ok&&editingDraftId===draft.id)resetDraftEditor();
+          $('draftStatus').textContent=ok?'Taslak şifreli kasadan silindi.':'Taslak silinemedi.';
+        });
+      });
+      row.append(heading,body,edit,remove);list.append(row);
     }
   }
   function secureDraftId() {
@@ -387,26 +418,38 @@
   $('draftPeer').addEventListener('input',()=>{
     $('draftPeer').value=$('draftPeer').value.replace(/\\D/g,'').slice(0,6);
   });
+  $('draftSearch').addEventListener('input',()=>{if(opened)renderDrafts();});
+  $('cancelDraftEdit').addEventListener('click',()=>{if(!opened)return;resetDraftEditor();$('draftStatus').textContent='Düzenleme iptal edildi.';});
   $('saveDraft').addEventListener('click',async()=>{
     if(!opened||!vault||!vault.data||document.hidden)return;
     const peer=$('draftPeer').value.trim(),body=$('draftText').value.trim();
     if(!/^[1-9][0-9]{5}$/.test(peer)||!body||body.length>1000){
       $('draftStatus').textContent='6 haneli kod ve en fazla 1000 karakterlik mesaj gerekli.';return;
     }
-    const id=secureDraftId();
+    const editing=editingDraftId, id=editing||secureDraftId();
     if(!id){$('draftStatus').textContent='Güvenli rastgele sayı üretilemedi; mesaj kaydedilmedi.';return;}
     $('saveDraft').disabled=true;
     try {
       const ok=await persist(data=>{
         if(!data.messages)data.messages=[];
-        if(data.messages.length>=80)throw Error('Full');
-        data.messages.push({id,peer,text:body,createdAt:Date.now()});
+        if(editing) {
+          const prior=data.messages.find(item=>item.id===editing);
+          if(!prior)throw Error('MissingDraft');
+          prior.peer=peer;prior.text=body;
+        } else {
+          if(data.messages.length>=80)throw Error('Full');
+          data.messages.push({id,peer,text:body,createdAt:Date.now()});
+        }
       });
       if(ok && opened){
-        $('draftText').value='';
-        $('draftStatus').textContent='Mesaj şifreli PIN kasasına kaydedildi. Karşı tarafa gönderilmedi.';
+        resetDraftEditor();
+        $('draftStatus').textContent=editing
+          ? 'Taslak şifreli PIN kasasında güncellendi. Karşı tarafa gönderilmedi.'
+          : 'Mesaj şifreli PIN kasasına kaydedildi. Karşı tarafa gönderilmedi.';
       } else if(opened){$('draftStatus').textContent='Taslak kaydedilemedi. PIN kasasını kontrol et.';}
-    }catch(_){if(opened)$('draftStatus').textContent='En fazla 80 taslak saklanabilir.';}
+    }catch(_){if(opened)$('draftStatus').textContent=editing
+      ? 'Taslak artık mevcut değil. Listeyi kontrol et.'
+      : 'En fazla 80 taslak saklanabilir.';}
     finally{$('saveDraft').disabled=false;}
   });
   $('contactsEnabled').addEventListener('change',async()=>{const desired=$('contactsEnabled').checked;const ok=await persist(data=>{data.contactsEnabled=desired;});if(!ok)$('contactsEnabled').checked=!desired;});
