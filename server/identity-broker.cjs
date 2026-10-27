@@ -117,6 +117,9 @@ class Broker {
     const device=this.devices.get(id);
     if(!device||device.revoked||!await this.verifyProof(device.publicKey,signature,'LOGIN',id,nonce))
       throw Error('Authentication denied');
+    // Device revocation may occur during async ECDSA verification.
+    if(this.devices.get(id)!==device || device.revoked)
+      throw Error('Authentication denied');
     const token=this.random(32);
     for(const [old,session] of this.sessions)if(session.expiresAt<this.clock())this.sessions.delete(old);
     if(this.sessions.size>=10000)throw Error('Session capacity exhausted');
@@ -205,6 +208,10 @@ class Broker {
       throw Error('Unknown recipient');
     if(!this.trustedPairs.has(this.pairKey(from,to)))throw Error('Pairing approval required');
     const now=this.clock();
+    // Refuse a full recipient inbox before signature/replay consumption;
+    // callers must not burn a valid nonce for a queue that cannot accept it.
+    const current=(this.pending.get(to)||[]).filter(item=>item.body.expiresAt>=now);
+    if(current.length>=10)throw Error('Recipient busy');
     if(!await Auth.verifyInvite(this.crypto,envelope,sender.publicKey,from,to,this.replay,now))
       throw Error('Rejected invitation');
     // Signature verification is asynchronous; recheck authorization/consent
@@ -215,8 +222,10 @@ class Broker {
       throw Error('Pairing approval required');
     if(this.persistence && !this.persistence.consumeInviteNonce(from+':'+envelope.body.nonce,
         envelope.body.expiresAt,now))throw Error('Rejected invitation');
+    // Check again after the async signature check and durable nonce commit:
+    // concurrent callers may have filled the queue in the meantime.
     const pending=this.pending.get(to)||[];
-    const active=pending.filter(e=>e.body.expiresAt>=now);
+    const active=pending.filter(e=>e.body.expiresAt>=this.clock());
     if(active.length>=10)throw Error('Recipient busy');
     active.push(envelope);this.pending.set(to,active);
     return {accepted:true,expiresAt:envelope.body.expiresAt};
