@@ -7,6 +7,7 @@
   let peer = null, call = null, stream = null, state = 'idle', ready = false;
   let epoch = 0, timeout = null, retry = null, connectTimeout = null, transportTimeout = null, attempts = 0;
   let muted = false, paused = false, myId = '';
+  let callWantsVideo = false;
   const pairs = new Set();
   let ringback = false;
 
@@ -52,6 +53,8 @@
     $('hangBtn').hidden = state === 'idle';
     $('muteBtn').hidden = state !== 'connected';
     $('retryBtn').hidden = ready && !paused;
+    $('videoEnabled').disabled = state !== 'idle';
+    $('callBtn').textContent = $('videoEnabled').checked ? 'Görüntülü ara' : 'Sesli ara';
     native('setRinging', state === 'ringing' && !paused);
     native('setIncomingNotification', state === 'ringing' && !paused);
     if (state !== 'dialing') { ringback = false; native('setRingback', false); }
@@ -74,15 +77,19 @@
       .map(([label, key]) => label + ': ' + (settings[key] === true ? 'açık' : settings[key] === false ? 'kapalı' : 'destek bildirilmedi'));
     $('filterStatus').textContent = text.join(' · ');
   }
-  async function getStream(token) {
-    let result;
-    try { result = await navigator.mediaDevices.getUserMedia(constraints()); }
+  async function getStream(token, requestVideo = false) {
+    let result, downgraded = false;
+    const wanted = constraints();
+    if (requestVideo) wanted.video = {facingMode: 'user', width: {ideal: 640}, height: {ideal: 480}, frameRate: {ideal: 20, max: 24}};
+    try { result = await navigator.mediaDevices.getUserMedia(wanted); }
     catch (error) {
-      if (error.name !== 'OverconstrainedError') throw error;
+      // Video consent is separate from microphone consent. If video cannot
+      // start, downgrade explicitly to an audio-only call; never claim video.
+      if (!requestVideo && error.name !== 'OverconstrainedError') throw error;
       if (token !== epoch || paused) return null;
-      // Unsupported filter constraints: retain a usable microphone, report actual support.
-      log('Filtered capture unavailable; retrying plain audio');
-      result = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+      downgraded = requestVideo;
+      log('Optional capture constraints unavailable; attempting microphone only');
+      result = await navigator.mediaDevices.getUserMedia({audio: requestVideo ? constraints().audio : true, video: false});
     }
     if (token !== epoch || state === 'idle' || paused) {
       result.getTracks().forEach(track => track.stop());
@@ -100,9 +107,29 @@
     }
     stream = result; muted = false;
     $('muteBtn').textContent = 'Mikrofonu kapat'; $('muteBtn').setAttribute('aria-pressed', 'false');
-    result.getTracks().forEach(track => track.addEventListener('ended', () => {
+    audioTracks.forEach(track => track.addEventListener('ended', () => {
       if (stream === result) endCall('Mikrofon bağlantısı kesildi.');
     }));
+    const videoTracks = typeof result.getVideoTracks === 'function' ? result.getVideoTracks() : [];
+    if (videoTracks.length && videoTracks.some(track => track.readyState !== 'ended')) {
+      $('videoPanel').hidden = false;
+      $('localVideo').srcObject = result;
+      $('videoStatus').textContent = 'Görüntü bu görüşme için açık. Kamera kapatılırsa ses devam eder.';
+      videoTracks.forEach(track => track.addEventListener('ended', () => {
+        if (stream === result) {
+          $('localVideo').srcObject = null;
+          $('videoStatus').textContent = 'Kamera durdu; görüşme sesli devam ediyor.';
+        }
+      }));
+      try {
+        const preview = $('localVideo').play();
+        if (preview && preview.catch) preview.catch(() => {
+          $('videoStatus').textContent = 'Kamera açık; önizleme başlatılamadı.';
+        });
+      } catch (_) { $('videoStatus').textContent = 'Kamera açık; önizleme başlatılamadı.'; }
+    } else if (downgraded) {
+      $('videoStatus').textContent = 'Kamera açılamadı; yalnız sesli arama yapılıyor.';
+    }
     native('setCallActive', true); filters();
     return result;
   }
@@ -131,6 +158,11 @@
     try { $('remote').pause(); } catch (_) { log('Remote media pause failed during cleanup'); }
     try { $('remote').srcObject = null; } catch (_) { log('Remote media detach failed during cleanup'); }
     $('playBtn').hidden = true;
+    for (const id of ['localVideo', 'remoteVideo']) {
+      try { $(id).pause(); $(id).srcObject = null; } catch (_) { log('Video preview cleanup failed'); }
+    }
+    $('videoPanel').hidden = true; $('videoStatus').textContent = '';
+    callWantsVideo = false;
     native('setCallActive', false); ui(); say(message || 'Hazır.');
   }
   function deadline(token, message) {
@@ -221,6 +253,23 @@
         return;
       }
       $('remote').srcObject = remote;
+      const incomingVideo = typeof remote.getVideoTracks === 'function' ? remote.getVideoTracks() : [];
+      if (incomingVideo.some(track => track.readyState !== 'ended')) {
+        $('videoPanel').hidden = false;
+        $('remoteVideo').srcObject = remote;
+        try {
+          const preview = $('remoteVideo').play();
+          if (preview && preview.catch) preview.catch(() => {
+            $('videoStatus').textContent = 'Karşı tarafın görüntüsü başlatılamadı.';
+          });
+        } catch (_) { $('videoStatus').textContent = 'Karşı tarafın görüntüsü başlatılamadı.'; }
+        incomingVideo.forEach(track => track.addEventListener('ended', () => {
+          if (call === connection && token === epoch) {
+            $('remoteVideo').srcObject = null;
+            $('videoStatus').textContent = 'Karşı tarafın kamerası kapandı; ses devam ediyor.';
+          }
+        }));
+      }
       // A received stream can disappear without a PeerJS close callback.
       // Never report an active call after its remote audio has ended.
       const remoteEnded = () => {
@@ -255,21 +304,26 @@
     if (!/^[1-9]\d{5}$/.test(id)) { say('6 haneli geçerli kodu yaz.'); return; }
     if (id === myId) { say('Kendi kodunu arayamazsın.'); return; }
     const token = ++epoch;
-    state = 'preparing'; ui(); say('Mikrofon açılıyor…');
+    callWantsVideo = $('videoEnabled').checked;
+    state = 'preparing'; ui(); say(callWantsVideo ? 'Mikrofon ve kamera açılıyor…' : 'Mikrofon açılıyor…');
     deadline(token, 'Arama zaman aşımına uğradı. Karşı tarafın uygulaması açık olmalı.');
     try {
-      const local = await getStream(token);
+      const local = await getStream(token, callWantsVideo);
       if (!local || token !== epoch) return;
-      attach(peer.call(PREFIX + id, local), token);
+      const hasVideo = typeof local.getVideoTracks === 'function' &&
+        local.getVideoTracks().some(track => track.readyState !== 'ended');
+      attach(peer.call(PREFIX + id, local, {metadata: {video: !!hasVideo}}), token);
       state = 'dialing'; ui(); say('Aranıyor…');
     } catch (error) { mediaError(error, token); }
   }
   async function answer() {
     if (state !== 'ringing' || !call || paused || (window.LanuLens && !window.LanuLens.isOpen())) return;
     const connection = call, token = epoch;
-    state = 'preparing'; ui(); say('Mikrofon açılıyor…');
+    // An inbound video request never silently activates our camera.
+    callWantsVideo = !!(connection.metadata && connection.metadata.video === true && $('videoEnabled').checked);
+    state = 'preparing'; ui(); say(callWantsVideo ? 'Mikrofon ve kamera açılıyor…' : 'Mikrofon açılıyor…');
     try {
-      const local = await getStream(token);
+      const local = await getStream(token, callWantsVideo);
       if (!local || call !== connection || token !== epoch) return;
       connection.answer(local); state = 'dialing'; ui(); say('Ses bağlantısı kuruluyor…');
     } catch (error) { mediaError(error, token); }
@@ -454,6 +508,27 @@
     },
     state:()=>state
   };
+  $('videoEnabled').addEventListener('change', () => {
+    if (state === 'idle') ui();
+  });
+  $('noisePreset').addEventListener('change', async () => {
+    const values = {
+      balanced: {ns:true, ec:true, agc:false},
+      noisy: {ns:true, ec:true, agc:true},
+      natural: {ns:false, ec:true, agc:false}
+    };
+    const profile = values[$('noisePreset').value];
+    if (!profile) return;
+    for (const key of ['ns','ec','agc']) {
+      $(key).checked = profile[key];
+      safeSet('lanu-' + key, String(profile[key]));
+    }
+    const track = stream && stream.getAudioTracks()[0], token = epoch;
+    if (track) {
+      try { await track.applyConstraints(constraints().audio); if (token === epoch) filters(); }
+      catch (_) { if (token === epoch) say('Bu cihaz ses profilini canlı uygulayamadı. Sonraki aramada yeniden denenecek.'); }
+    } else filters();
+  });
   ['ns', 'ec', 'agc'].forEach(id => {
     const saved = safeGet('lanu-' + id); if (saved !== null) $(id).checked = saved === 'true';
     $(id).addEventListener('change', async () => {
