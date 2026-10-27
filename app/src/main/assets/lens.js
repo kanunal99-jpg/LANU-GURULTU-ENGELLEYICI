@@ -47,7 +47,7 @@
     // This badge is never visible on the public-facing camera screen.
     $('updatesTab').textContent=(event.state==='available'||event.state==='ready')?'Güncelleme var':'Güncelleme Kontrol';
     $('installedVersion').textContent = (event.version || 'bilinmiyor') + ' (kod ' + (event.versionCode || '?') + ')';
-    const hasNew = typeof event.availableVersion === 'string' && /^\\d+\\.\\d+\\.\\d+$/.test(event.availableVersion);
+    const hasNew = typeof event.availableVersion === 'string' && /^\d+\.\d+\.\d+$/.test(event.availableVersion);
     $('availableVersion').textContent = hasNew
       ? event.availableVersion + ' (kod ' + (event.availableVersionCode || '?') + ')'
       : event.state === 'current' ? 'Güncel' : event.configured === false ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
