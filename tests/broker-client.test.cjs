@@ -109,3 +109,86 @@ test('bundled broker client is parseable by Android 10 Chrome 74',()=>{
  assert.ok(source.includes('typeof fetchApi'));
  assert.ok(source.includes('identity.privateKey.extractable'));
 });
+
+
+test('signed 15-minute bearer token is never sent after its local expiry',async()=>{
+ let now=Date.now();
+ const identity=await Auth.generate(webcrypto);
+ const broker=new Broker({clock:()=>now}),mock=service(broker);
+ const client=Client.create({...options(identity,mock.api),clock:()=>now});
+ await client.enroll(identity);
+ await client.signIn();
+ assert.deepEqual(await client.pendingCalls(),[]);
+ const count=mock.calls.length;
+ now+=900000;
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+ assert.equal(mock.calls.length,count,'expired bearer must not cross network boundary');
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
+
+
+test('manual lock during slow signed login never reopens a bearer session',async()=>{
+ const identity=await Auth.generate(webcrypto),broker=new Broker(),mock=service(broker);
+ let release,entered;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const observed=new Promise(resolve=>{entered=resolve;});
+ const fetchDelayed=async(url,options)=>{
+   if(url.endsWith('/v1/session/complete')){entered();await gate;}
+   return mock.api(url,options);
+ };
+ const client=Client.create(options(identity,fetchDelayed));
+ await client.enroll(identity);
+ const pending=client.signIn();
+ await observed;
+ client.expire(); // PIN lock/background event during async login.
+ release();
+ await assert.rejects(pending,/Sign-in cancelled/);
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
+test('manual lock during pending inbox request cannot accept stale response',async()=>{
+ const identity=await Auth.generate(webcrypto),broker=new Broker(),mock=service(broker);
+ let release,entered;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const observed=new Promise(resolve=>{entered=resolve;});
+ let delay=false;
+ const client=Client.create(options(identity,async(url,options)=>{
+   const response=await mock.api(url,options);
+   if(delay && url.endsWith('/v1/calls/pending')){
+     return {...response,text:async()=>{entered();await gate;return response.text();}};
+   }
+   return response;
+ }));
+ await client.enroll(identity);
+ await client.signIn();
+ delay=true;
+ const pending=client.pendingCalls();
+ await observed;
+ client.expire();
+ release();
+ await assert.rejects(pending,/Authentication required/);
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
+
+
+test('lock during delayed login challenge stops signature and session request entirely',async()=>{
+ const identity=await Auth.generate(webcrypto),broker=new Broker(),mock=service(broker);
+ let release,entered;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const observed=new Promise(resolve=>{entered=resolve;});
+ const fetchDelayed=async(url,options)=>{
+   const response=await mock.api(url,options);
+   if(url.endsWith('/v1/session/challenge')){
+     return {...response,text:async()=>{entered();await gate;return response.text();}};
+   }
+   return response;
+ };
+ const client=Client.create(options(identity,fetchDelayed));
+ await client.enroll(identity);
+ const pending=client.signIn();
+ await observed;
+ client.expire();
+ release();
+ await assert.rejects(pending,/Sign-in cancelled/);
+ assert.equal(mock.calls.some(x=>x.url.endsWith('/v1/session/complete')),false);
+ await assert.rejects(()=>client.pendingCalls(),/Authentication required/);
+});
