@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#101217"><title>Lanu Lens</title>
   <link rel="icon" href="lens.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
-  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="encrypted-transfer.js"></script><script defer src="diagnostics.js"></script><script defer src="auth-protocol.js"></script><script defer src="auth-keystore.js"></script><script defer src="broker-client.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="app.js"></script>
+  <script defer src="vendor/peerjs.min.js"></script><script defer src="vault.js"></script><script defer src="encrypted-transfer.js"></script><script defer src="diagnostics.js"></script><script defer src="auth-protocol.js"></script><script defer src="auth-keystore.js"></script><script defer src="broker-client.js"></script><script defer src="entry.js"></script><script defer src="lens.js"></script><script defer src="audio-policy.js"></script><script defer src="app.js"></script>
 </head>
 <body>
   <main id="cameraView" class="camera-shell">
@@ -65,10 +65,11 @@
         <option value="balanced">Dengeli</option>
         <option value="noisy">Gürültülü ortam</option>
         <option value="natural">Doğal ses</option>
+        <option value="custom" disabled>Özel ayarlar</option>
       </select>
       <label class="row" for="ns"><span>Gürültü azaltma</span><input type="checkbox" id="ns" checked></label>
       <label class="row" for="ec"><span>Yankı önleme</span><input type="checkbox" id="ec" checked></label>
-      <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc" checked></label>
+      <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc"></label>
       <label class="row" for="speaker"><span>Hoparlör</span><input type="checkbox" id="speaker"></label>
       <button id="btBtn" class="secondary">Bluetooth kulaklığa izin ver</button>
       <p id="filterStatus" class="hint">Filtreler mikrofonundan karşıya giden sese uygulanır. Sonuç cihazın WebView desteğine bağlıdır.</p>
