@@ -16,8 +16,17 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Real Android WebView/asset/bridge startup smoke; does not claim real-phone audio QA. */
 public class SmokeInstrumentation extends Instrumentation {
-    @Override public void onCreate(Bundle args) { super.onCreate(args); start(); }
+    private String otaUpgradePhase = "";
+    @Override public void onCreate(Bundle args) {
+        otaUpgradePhase = args == null ? "" : args.getString("otaUpgradePhase", "");
+        super.onCreate(args);
+        start();
+    }
     @Override public void onStart() {
+        if ("seed".equals(otaUpgradePhase) || "verify".equals(otaUpgradePhase)) {
+            runOtaUpgradePersistenceTest();
+            return;
+        }
         Bundle test = new Bundle();
         test.putString("class", getClass().getName()); test.putString("test", "bundledWebViewStarts");
         test.putInt("numtests", 1); test.putInt("current", 1); sendStatus(1, test);
@@ -116,6 +125,116 @@ public class SmokeInstrumentation extends Instrumentation {
             if (activity != null) { final Activity target = activity; runOnMainSync(target::finish); }
         }
     }
+    /**
+     * Android package-upgrade persistence is independent of a real touchhold.
+     * The separate normal smoke test exercises the real touch input. Here a
+     * WebView keyboard hold triggers exactly the shipped three-second gate
+     * handler even when a headless Android emulator has no focused window.
+     */
+    private void openOtaPinGate(WebView web) throws Exception {
+        require(web, "!document.hidden && document.getElementById('cameraView').hidden === false",
+                "OTA vault acceptance requires visible app document");
+        js(web, "document.getElementById('lensEmblem').dispatchEvent("
+                + "new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))");
+        try {
+            awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
+                    "Three-second PIN gate opens in emulator");
+        } finally {
+            js(web, "document.getElementById('lensEmblem').dispatchEvent("
+                    + "new KeyboardEvent('keyup',{key:'Enter',bubbles:true,cancelable:true}))");
+        }
+    }
+
+    /**
+     * Runs on a disposable CI emulator only. The "seed" process is installed
+     * from an older debug-signed APK, "verify" from a newer APK signed by the
+     * SAME keystore. Both are real Android package installs, not mock code.
+     * This is not a physical-device or production-key acceptance test.
+     */
+    private void runOtaUpgradePersistenceTest() {
+        Bundle status = new Bundle();
+        status.putString("class", getClass().getName());
+        status.putString("test", "otaUpgradePersistence_" + otaUpgradePhase);
+        status.putInt("numtests", 1);
+        status.putInt("current", 1);
+        sendStatus(1, status);
+        Activity activity = null;
+        try {
+            activity = startActivitySync(new Intent(getTargetContext(), MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            final Activity target = activity;
+            AtomicReference<WebView> view = new AtomicReference<>();
+            runOnMainSync(() -> view.set((WebView)
+                    ((ViewGroup) target.findViewById(android.R.id.content)).getChildAt(0)));
+            WebView web = view.get();
+            awaitTrue(web, "document.readyState === 'complete' && typeof window.LanuLens === 'object'",
+                    20000, "Updater test WebView initialized");
+            final String marker = "LANU-OTA-CI-ENCRYPTED-DRAFT-20261027";
+            if ("seed".equals(otaUpgradePhase)) {
+                // Only this artificial smoke-test preference is written natively.
+                if (!target.getSharedPreferences("lanu-ota-ci-upgrade", 0).edit()
+                        .putString("marker", marker).commit())
+                    throw new AssertionError("Native persistence marker not committed");
+                openOtaPinGate(web);
+                awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
+                        "PIN gate opens on the old version");
+                js(web, "document.getElementById('pin').value='741963';"
+                        + "document.getElementById('pinConfirm').value='741963';"
+                        + "document.getElementById('pinForm').dispatchEvent(new Event('submit',{cancelable:true}))");
+                awaitTrue(web, "!document.getElementById('privateView').hidden", 15000,
+                        "Encrypted vault created in old app");
+                js(web, "document.getElementById('draftPeer').value='762415';"
+                        + "document.getElementById('draftText').value='LANU-OTA-CI-ENCRYPTED-DRAFT-20261027';"
+                        + "document.getElementById('saveDraft').click()");
+                awaitTrue(web, "document.getElementById('draftCount').textContent.includes('1 / 1')"
+                        + " && document.getElementById('draftList').textContent.includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')",
+                        15000, "Encrypted draft written to old app vault");
+                require(web, "!!localStorage.getItem('lens-vault-v1')"
+                        + " && !localStorage.getItem('lens-vault-v1').includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')",
+                        "Draft must not be stored in plaintext");
+                js(web, "window.LanuLens.lock()");
+                require(web, "document.getElementById('privateView').hidden",
+                        "PIN lock before upgrade");
+            } else {
+                if (!marker.equals(target.getSharedPreferences("lanu-ota-ci-upgrade", 0)
+                        .getString("marker", "")))
+                    throw new AssertionError("Native app preferences lost during in-place APK update");
+                require(web, "document.getElementById('privateView').hidden"
+                        + " && !!localStorage.getItem('lens-vault-v1')"
+                        + " && !localStorage.getItem('lens-vault-v1').includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')",
+                        "Encrypted WebView vault must survive and remain PIN-locked");
+                openOtaPinGate(web);
+                awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
+                        "PIN gate opens after upgrading APK");
+                require(web, "document.getElementById('pinConfirm').hidden",
+                        "Old PIN must be recognized, not overwritten by a new vault");
+                js(web, "document.getElementById('pin').value='741963';"
+                        + "document.getElementById('pinForm').dispatchEvent(new Event('submit',{cancelable:true}))");
+                awaitTrue(web, "!document.getElementById('privateView').hidden"
+                        + " && document.getElementById('draftList').textContent.includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')"
+                        + " && document.getElementById('draftCount').textContent.includes('1 / 1')",
+                        15000, "Original PIN decrypts original draft after same-key upgrade");
+                js(web, "window.LanuLens.lock()");
+            }
+            status.putString("stream", "Real Android same-key APK update preserves PIN, encrypted draft and native preferences (" + otaUpgradePhase + ").\\n");
+            sendStatus(0, status);
+            Bundle result = new Bundle();
+            result.putString("stream", "OK (1 test)\\n");
+            finish(Activity.RESULT_OK, result);
+        } catch (Throwable failure) {
+            status.putString("stack", failure.toString());
+            sendStatus(-2, status);
+            Bundle result = new Bundle();
+            result.putString("stream", "FAILURES!!!\\n" + failure);
+            finish(Activity.RESULT_CANCELED, result);
+        } finally {
+            if (activity != null) {
+                final Activity target = activity;
+                runOnMainSync(target::finish);
+            }
+        }
+    }
+
     private void assertUpdaterGate(Activity target, boolean expected, String description) throws Exception {
         // Wait for the JS-to-Java @JavascriptInterface call and its UI-thread
         // relay to settle before asserting the trusted native permission state.
