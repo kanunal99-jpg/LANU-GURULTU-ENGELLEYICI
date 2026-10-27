@@ -170,3 +170,15 @@ test('OTA production gate checks actual installed signer before availability',()
  const smoke=fs.readFileSync('app/src/androidTest/java/com/lanu/sesli/SmokeInstrumentation.java','utf8');
  assert.ok(smoke.includes('LanuUpdater.matchesPinnedSigner('));
 });
+
+test('fresh-install production signer is locked to a permanent public certificate',()=>{
+ assert.ok(gradle.includes('canonicalReleaseCert'));
+ assert.ok(gradle.includes('39b2beadf8f3ba3936f58d0617c862932737fff45360baff5cadeb8d0f30d278'));
+ assert.ok(gradle.includes('pinnedReleaseCert == canonicalReleaseCert'));
+});
+test('empty initial OTA mirror does not masquerade as broken network or installable update',()=>{
+ assert.ok(java.includes('feedNotYetPublished=true'));
+ assert.ok(java.includes('previous!=null'));
+ assert.ok(java.includes('emit("unpublished"'));
+ assert.ok(lens.includes("event.state === 'unpublished'"));
+});
