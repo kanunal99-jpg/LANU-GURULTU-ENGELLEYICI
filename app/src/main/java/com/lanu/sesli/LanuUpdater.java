@@ -153,6 +153,7 @@ final class LanuUpdater {
         io.execute(()->{
             Candidate found=null;
             String error=null;
+            boolean feedNotYetPublished=false;
             try {
                 byte[] bytes=readSmall(feed);
                 JSONObject m=new JSONObject(new String(bytes,StandardCharsets.UTF_8));
@@ -161,11 +162,24 @@ final class LanuUpdater {
                 String version=m.getString("versionName"),url=m.getString("apkUrl");
                 String hash=m.getString("sha256").toLowerCase(Locale.ROOT);
                 long size=m.getLong("sizeBytes");
-                if(code<=0||version.length()<1||version.length()>40
-                    ||!version.matches("[0-9A-Za-z._+\\-]+")
-                    ||!hash.matches("[0-9a-f]{64}")||size<1024||size>MAX_APK
-                    ||!isApkUrl(url) || !isExpectedReleaseUrl(url,version,code))throw new IllegalArgumentException("Güncelleme dosyası bilgileri geçersiz");
-                found=new Candidate(code,version,url,hash,size);
+                // The public OTA mirror starts with an explicit empty sentinel
+                // while the one-time fresh production baseline is being installed.
+                // An initial v0 sentinel is NOT a transport error. Any malformed
+                // v0 or a reset AFTER seeing a real release is still unsafe.
+                if(code==0){
+                    if(!(m.opt("versionCode") instanceof Number)
+                            ||!"0.0.0".equals(version)||!url.isEmpty()
+                            ||!hash.isEmpty()||size!=0 || previous!=null)
+                        throw new SecurityException("OTA feed reset or malformed bootstrap");
+                    feedNotYetPublished=true;
+                } else {
+                    if(code<0||version.length()<1||version.length()>40
+                        ||!version.matches("[0-9A-Za-z._+\\-]+")
+                        ||!hash.matches("[0-9a-f]{64}")||size<1024||size>MAX_APK
+                        ||!isApkUrl(url) || !isExpectedReleaseUrl(url,version,code))
+                        throw new IllegalArgumentException("Güncelleme dosyası bilgileri geçersiz");
+                    found=new Candidate(code,version,url,hash,size);
+                }
             }catch(Exception e){
                 Log.w(TAG,"Update metadata unavailable ("+e.getClass().getSimpleName()+")");
                 error="Manifest HTTP status: 404".equals(e.getMessage())
@@ -173,6 +187,7 @@ final class LanuUpdater {
                         : "Sürüm bilgisi alınamadı. Bağlantını ve yayın adresini kontrol et.";
             }
             final Candidate candidate=found;final String failure=error;
+            final boolean unpublished=feedNotYetPublished;
             main.post(()->{
                 if(destroyed)return;
                 busy=false;
@@ -184,6 +199,10 @@ final class LanuUpdater {
                     } else {
                         latest=null;verified=null;emit("error",failure);
                     }
+                } else if(unpublished) {
+                    latest=null;
+                    verified=null;
+                    emit("unpublished","İlk güvenli kurulum hazır. Henüz yeni bir OTA sürümü yayımlanmadı.");
                 } else {
                     latest=candidate;
                     verified=sameCandidate(previous,candidate) && previousApk!=null

@@ -57,7 +57,7 @@
     const hasNew = typeof event.availableVersion === 'string' && /^\d+\.\d+\.\d+$/.test(event.availableVersion);
     $('availableVersion').textContent = hasNew
       ? event.availableVersion + ' (kod ' + (event.availableVersionCode || '?') + ')'
-      : event.state === 'current' ? 'Güncel' : event.configured === false ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
+      : event.state === 'current' ? 'Güncel' : (event.state === 'unpublished' || event.configured === false) ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
     const fileBytes = event.availableSizeBytes;
     const validSize = hasNew && Number.isSafeInteger(fileBytes) && fileBytes >= 1024 && fileBytes <= 160 * 1024 * 1024;
     $('updateFileSize').hidden = !validSize;

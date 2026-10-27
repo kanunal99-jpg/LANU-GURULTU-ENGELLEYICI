@@ -53,6 +53,17 @@ test('unconfigured signatures never report a new version as installable',()=>{
   assert.equal(h.$('downloadUpdate').hidden,true);
   assert.equal(h.$('installUpdate').hidden,true);
 });
+test('first clean-install release correctly shows waiting for first OTA without install actions',()=>{
+  const h=updaterView();
+  h.event({state:'unpublished',version:'2.0.10',versionCode:245,configured:true,
+    message:'İlk güvenli kurulum hazır. Henüz yeni bir OTA sürümü yayımlanmadı.'});
+  assert.equal(h.$('installedVersion').textContent,'2.0.10 (kod 245)');
+  assert.equal(h.$('availableVersion').textContent,'Yayın bekleniyor');
+  assert.equal(h.$('downloadUpdate').hidden,true);
+  assert.equal(h.$('installUpdate').hidden,true);
+  assert.equal(h.$('updateFileSize').hidden,true);
+  assert.match(h.$('updateStatus').textContent,/Henüz yeni bir OTA sürümü yayımlanmadı/);
+});
 test('APK size is shown only for a valid available release and not in the public PIN-locked view',()=>{
   const h=updaterView();
   h.event({state:'available',version:'2.0.10',versionCode:214,availableVersion:'2.0.11',availableVersionCode:220,availableSizeBytes:12*1048576});

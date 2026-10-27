@@ -96,6 +96,7 @@ public class SmokeInstrumentation extends Instrumentation {
             // racing with separate synthetic event/assertion evaluations.
             require(web,"(window.lanuUpdateEvent({state:'available',version:'2.0.9',versionCode:999999,message:'Update test'}), !document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden)","New build offers one-tap download and install");
             require(web,"(window.lanuUpdateEvent({state:'ready',version:'2.0.9',versionCode:999999,message:'Verified'}), document.getElementById('downloadUpdate').hidden && !document.getElementById('installUpdate').hidden)","Verified APK allows installer retry");
+            require(web,"(window.lanuUpdateEvent({state:'unpublished',version:'2.0.10',versionCode:239,configured:true,message:'Awaiting first OTA'}), document.getElementById('availableVersion').textContent === 'Yayın bekleniyor' && document.getElementById('downloadUpdate').hidden && document.getElementById('installUpdate').hidden)","Clean-install base shows pending first release instead of offering installer");
             require(web,"typeof window.LanuDiagnostics.snapshot==='function' && typeof window.LanuDiagnostics.render==='function'","Bundled offline diagnostics available");
             js(web,"document.getElementById('diagnosticsTab').click()");
             require(web,"!document.getElementById('diagnosticsPane').hidden && document.getElementById('callsPane').hidden && document.getElementById('updatesPane').hidden","Diagnosis stays in private PIN area");
