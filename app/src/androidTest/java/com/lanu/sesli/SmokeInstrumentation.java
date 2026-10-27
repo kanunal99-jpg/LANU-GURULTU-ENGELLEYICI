@@ -186,6 +186,17 @@ public class SmokeInstrumentation extends Instrumentation {
         long deadline=SystemClock.uptimeMillis()+6000;
         boolean collapsedSystemShade=false;
         while(SystemClock.uptimeMillis()<deadline){
+            // On the API29 emulator the WebView document can retain genuine
+            // focus while hasWindowFocus reports false following system/IME
+            // transition. Do not generate a new focus/blur pair every 120ms.
+            // The following shell gesture MUST still be observed as a real
+            // touchstart/pointerdown in the document or the test fails.
+            if(Build.VERSION.SDK_INT<=29){
+                AtomicReference<Boolean> visible=new AtomicReference<>(false);
+                runOnMainSync(()->visible.set(web.isShown() && web.getWindowToken()!=null));
+                if(Boolean.TRUE.equals(visible.get()) &&
+                        "true".equals(js(web,"document.hasFocus()")))return;
+            }
             AtomicReference<Boolean> ownsFocus=new AtomicReference<>(false);
             runOnMainSync(()->{
                 web.setFocusableInTouchMode(true);
