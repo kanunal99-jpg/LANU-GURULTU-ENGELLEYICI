@@ -76,6 +76,7 @@ test('workflow stages signed APK but requires manual approval before public OTA'
  assert.match(build,/İmzalı OTA adayı için gerçek cihaz kabulü bekle/);
  assert.doesNotMatch(build,/bash scripts\/publish-ota.sh/);
  assert.match(promotion,/workflow_dispatch:/);
+ assert.match(promotion,/if: github\.ref == 'refs\/heads\/main'/);
  assert.match(promotion,/LANU_OTA_DEVICE_ACCEPTED_APK_SHA256/);
  assert.match(promotion,/verify-ota-promotion-candidate.sh/);
  assert.match(promotion,/gh release download/);
