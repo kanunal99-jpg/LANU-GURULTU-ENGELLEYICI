@@ -23,7 +23,7 @@ public class SmokeInstrumentation extends Instrumentation {
         start();
     }
     @Override public void onStart() {
-        if ("seed".equals(otaUpgradePhase) || "verify".equals(otaUpgradePhase)) {
+        if ("seed".equals(otaUpgradePhase) || "cold".equals(otaUpgradePhase) || "verify".equals(otaUpgradePhase)) {
             runOtaUpgradePersistenceTest();
             return;
         }
@@ -200,10 +200,28 @@ public class SmokeInstrumentation extends Instrumentation {
                 if (!marker.equals(target.getSharedPreferences("lanu-ota-ci-upgrade", 0)
                         .getString("marker", "")))
                     throw new AssertionError("Native app preferences lost during in-place APK update");
-                require(web, "document.getElementById('privateView').hidden"
+                // WebView DOM storage is disk backed asynchronously. A newly
+                // started renderer may outlive document.readyState and briefly
+                // delay its storage view. Require the encrypted state rather
+                // than accepting a timing-dependent false PASS/FAIL.
+                String vaultReady = "document.getElementById('privateView').hidden"
                         + " && !!localStorage.getItem('lens-vault-v1')"
-                        + " && !localStorage.getItem('lens-vault-v1').includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')",
-                        "Encrypted WebView vault must survive and remain PIN-locked");
+                        + " && !localStorage.getItem('lens-vault-v1').includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')";
+                long storeDeadline = System.currentTimeMillis()+7000;
+                boolean storageRestored = false;
+                while (System.currentTimeMillis()<storeDeadline) {
+                    if ("true".equals(js(web, vaultReady))) {
+                        storageRestored=true;break;
+                    }
+                    Thread.sleep(150);
+                }
+                if (!storageRestored)
+                    throw new AssertionError("Encrypted WebView vault missing on " + otaUpgradePhase
+                        + " after bounded load. Non-sensitive diagnostics="
+                        + js(web, "JSON.stringify({ready:document.readyState,"
+                            + "origin:location.origin,hasVault:!!localStorage.getItem('lens-vault-v1'),"
+                            + "privateHidden:document.getElementById('privateView').hidden,"
+                            + "gateHidden:document.getElementById('gate').hidden})"));
                 openOtaPinGate(web);
                 awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
                         "PIN gate opens after upgrading APK");

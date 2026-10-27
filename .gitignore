@@ -7,3 +7,11 @@ local.properties
 *.zip
 node_modules/
 test-results/
+# Permanent LANU Lens OTA signing credentials: NEVER commit.
+private-credentials.env
+lanu-lens-release-keystore-base64.txt
+**/*release*keystore*base64*.txt
+**/signing-secrets.env
+**/.env.local
+**/.env.production
+**/release-signing.properties

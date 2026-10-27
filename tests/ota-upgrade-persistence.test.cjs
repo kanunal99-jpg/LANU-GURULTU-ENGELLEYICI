@@ -26,6 +26,11 @@ test('Android package replacement preserves PIN encrypted vault, draft and nativ
  assert.match(runner,/adb install -r "\$work\/old\.apk"/);
  assert.match(runner,/adb install -r "\$work\/new\.apk"/);
  assert.match(runner,/instrument seed/);
+ assert.match(runner,/instrument cold/);
+ assert.match(runner,/instrument verify/);
+ assert.ok(runner.indexOf('instrument cold')<runner.indexOf('adb install -r "$work/new.apk"'));
+ assert.match(instrument,/"cold".equals\(otaUpgradePhase\)/);
+ assert.match(instrument,/storageRestored/);
  assert.match(runner,/instrument verify/);
  assert.match(runner,/ro\.kernel\.qemu/);
  assert.match(runner,/LANU_DISPOSABLE_CI_EMULATOR/);
