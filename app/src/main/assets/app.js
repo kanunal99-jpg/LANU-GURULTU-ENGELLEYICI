@@ -114,11 +114,15 @@
     if (videoTracks.length && videoTracks.some(track => track.readyState !== 'ended')) {
       $('videoPanel').hidden = false;
       $('localVideo').srcObject = result;
+      $('stopVideo').hidden = false;
       $('videoStatus').textContent = 'Görüntü bu görüşme için açık. Kamera kapatılırsa ses devam eder.';
       videoTracks.forEach(track => track.addEventListener('ended', () => {
         if (stream === result) {
           $('localVideo').srcObject = null;
+          $('stopVideo').hidden = true;
+          if (!$('remoteVideo').srcObject) $('videoPanel').hidden = true;
           $('videoStatus').textContent = 'Kamera durdu; görüşme sesli devam ediyor.';
+          say('Kamera durdu; sesli görüşme sürüyor.');
         }
       }));
       try {
@@ -162,6 +166,7 @@
       try { $(id).pause(); $(id).srcObject = null; } catch (_) { log('Video preview cleanup failed'); }
     }
     $('videoPanel').hidden = true; $('videoStatus').textContent = '';
+    $('stopVideo').hidden = true;
     callWantsVideo = false;
     native('setCallActive', false); ui(); say(message || 'Hazır.');
   }
@@ -266,6 +271,7 @@
         incomingVideo.forEach(track => track.addEventListener('ended', () => {
           if (call === connection && token === epoch) {
             $('remoteVideo').srcObject = null;
+            if (!$('localVideo').srcObject) $('videoPanel').hidden = true;
             $('videoStatus').textContent = 'Karşı tarafın kamerası kapandı; ses devam ediyor.';
           }
         }));
@@ -510,6 +516,21 @@
   };
   $('videoEnabled').addEventListener('change', () => {
     if (state === 'idle') ui();
+  });
+  $('stopVideo').addEventListener('click', () => {
+    // One-way privacy operation: restarting camera requires a new consented call.
+    // Stop only video tracks. Never disable the microphone or end the call.
+    if (!stream || state === 'idle' || paused || (window.LanuLens && !window.LanuLens.isOpen())) return;
+    const activeVideo = typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
+    for (const track of activeVideo) {
+      try { track.enabled = false; track.stop(); }
+      catch (_) { log('Camera teardown failed; ending the call to protect privacy'); endCall('Kamera güvenle kapatılamadı. Görüşme sonlandırıldı.'); return; }
+    }
+    $('localVideo').srcObject = null;
+    $('stopVideo').hidden = true;
+    if (!$('remoteVideo').srcObject) $('videoPanel').hidden = true;
+    $('videoStatus').textContent = 'Kamera kapalı; yalnızca mikrofon görüşmeye devam ediyor.';
+    say('Kameran kapatıldı; sesli görüşme sürüyor.');
   });
   $('noisePreset').addEventListener('change', async () => {
     const values = {
