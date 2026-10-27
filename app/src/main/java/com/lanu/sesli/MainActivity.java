@@ -276,7 +276,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void download() { main.post(() -> { if (canShowUpdater()) updater.download(); }); }
         @JavascriptInterface public void downloadAndInstall() { main.post(() -> { if (canShowUpdater()) updater.downloadAndInstall(); }); }
         @JavascriptInterface public void install() { main.post(() -> { if (canShowUpdater()) updater.install(); }); }
-        @JavascriptInterface public void releases() { main.post(() -> { if (canShowUpdater()) updater.releasePage(); }); }
+        @JavascriptInterface public void cancelDownload() { main.post(() -> { if (canShowUpdater()) updater.cancelDownload(); }); }
     }
     void updateStatus(org.json.JSONObject data) {
         if (!canShowUpdater()) return;
