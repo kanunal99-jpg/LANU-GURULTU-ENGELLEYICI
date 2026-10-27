@@ -50,6 +50,7 @@
       <div id="videoPanel" class="video-panel" hidden aria-label="Görüntülü görüşme">
         <video id="remoteVideo" autoplay playsinline muted aria-label="Karşı tarafın görüntüsü"></video>
         <video id="localVideo" autoplay playsinline muted aria-label="Kendi kamera önizlemen"></video>
+        <button id="stopVideo" class="secondary" type="button" hidden>Kameramı kapat, ses devam etsin</button>
         <p id="videoStatus" class="hint" role="status" aria-live="polite"></p>
       </div>
       <button id="answerBtn" class="green" hidden>Gelen aramayı cevapla</button>
@@ -82,12 +83,16 @@
     </section>
     <section class="card" id="privateDrafts">
       <h2>PIN korumalı mesaj taslakları</h2>
-      <p class="hint">Taslaklar yalnız bu cihazda PIN kasasının içinde şifreli tutulur. Henüz karşı tarafa gönderilmez; güvenilir kimlik doğrulama olmadan mesaj aktarımı açılmaz.</p>
+      <p class="hint">Taslaklar yalnız bu cihazda PIN kasasının içinde şifreli tutulur. Mesajlar henüz karşı tarafa gönderilmez; altı haneli kod güvenilir kimlik doğrulama değildir.</p>
+      <label class="label" for="draftSearch">Taslaklarda ara</label>
+      <input id="draftSearch" type="search" maxlength="80" autocomplete="off" placeholder="Alıcı kodu veya mesaj metni">
+      <p id="draftCount" class="hint" aria-live="polite"></p>
       <label for="draftPeer" class="label">Alıcının görüşme kodu</label>
       <input id="draftPeer" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 haneli kod">
       <label for="draftText" class="label">Mesaj taslağı</label>
       <textarea id="draftText" maxlength="1000" rows="3" autocomplete="off" placeholder="Şifreli, yalnız bu cihazda saklanır"></textarea>
       <button id="saveDraft" type="button" class="secondary">Şifreli taslak kaydet</button>
+      <button id="cancelDraftEdit" type="button" class="secondary" hidden>Düzenlemeyi iptal et</button>
       <p id="draftStatus" class="hint" role="status" aria-live="polite"></p>
       <div id="draftList" class="draft-list" aria-label="Şifreli mesaj taslakları"></div>
     </section>
