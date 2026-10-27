@@ -715,3 +715,49 @@ test('noise profile changes checkbox state and applies live supported constraint
  assert.equal(h.get('agc').checked,true);
  assert.equal(applied.autoGainControl,true);
 });
+
+test('one-way camera-off keeps audio alive and prevents further local video frames',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.get('videoEnabled').checked=true;h.click('callBtn');
+ const camera={stopped:0,enabled:true,readyState:'live',addEventListener(){},
+   stop(){this.stopped++;this.readyState='ended';}};
+ const local={getTracks:()=>[h.track,camera],getAudioTracks:()=>[h.track],getVideoTracks:()=>[camera]};
+ h.resolve(local);await h.flush();
+ const call=h.peers[0].calls[0];
+ assert.equal(h.get('stopVideo').hidden,false);
+ assert.equal(h.get('localVideo').srcObject,local);
+ h.click('stopVideo');
+ assert.equal(camera.stopped,1);
+ assert.equal(camera.enabled,false);
+ assert.equal(h.track.stopped,0);
+ assert.equal(h.track.enabled,true);
+ assert.equal(call.closed,0);
+ assert.equal(h.get('stopVideo').hidden,true);
+ assert.equal(h.get('videoPanel').hidden,true);
+ assert.match(h.get('status').textContent,/sesli görüşme sürüyor/);
+ h.click('hangBtn');
+ assert.equal(h.track.stopped,1);
+});
+test('camera driver failure is not silently described as safe; call cleanup still stops microphone',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.get('videoEnabled').checked=true;h.click('callBtn');
+ const camera={enabled:true,readyState:'live',addEventListener(){},
+   stop(){throw Error('BrokenCameraDriver');}};
+ const local={getTracks:()=>[camera,h.track],getAudioTracks:()=>[h.track],getVideoTracks:()=>[camera]};
+ h.resolve(local);await h.flush();
+ assert.doesNotThrow(()=>h.click('stopVideo'));
+ assert.equal(h.track.stopped,1);
+ assert.equal(h.peers[0].calls[0].closed,1);
+ assert.match(h.get('status').textContent,/uygulamayı kapatıp yeniden aç/);
+});
+test('camera privacy switch cannot act on an already ended session',async()=>{
+ const h=harness();h.open();h.get('partner').value='654321';
+ h.get('videoEnabled').checked=true;h.click('callBtn');
+ const camera={stopped:0,enabled:true,readyState:'live',addEventListener(){},stop(){this.stopped++;}};
+ h.resolve({getTracks:()=>[h.track,camera],getAudioTracks:()=>[h.track],getVideoTracks:()=>[camera]});
+ await h.flush();
+ h.click('hangBtn');
+ const stopped=camera.stopped;
+ h.click('stopVideo');
+ assert.equal(camera.stopped,stopped);
+});
