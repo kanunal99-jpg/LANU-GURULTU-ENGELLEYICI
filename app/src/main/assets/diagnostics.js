@@ -17,15 +17,15 @@
     return {
       online: nav.onLine === true,
       secure: bool(env.isSecureContext),
-      crypto: typeof crypto.subtle?.deriveKey === 'function',
+      crypto: typeof (crypto.subtle && crypto.subtle.deriveKey) === 'function',
       webrtc: typeof env.RTCPeerConnection === 'function',
-      microphone: typeof nav.mediaDevices?.getUserMedia === 'function',
-      android: typeof env.LanuAudio?.setCallActive === 'function'
+      microphone: typeof (nav.mediaDevices && nav.mediaDevices.getUserMedia) === 'function',
+      android: typeof (env.LanuAudio && env.LanuAudio.setCallActive) === 'function'
     };
   }
   function render(doc, env) {
     const pane = doc.getElementById('diagnosticsPane');
-    if (!pane || pane.hidden || doc.getElementById('privateView')?.hidden) return false;
+    if (!pane || pane.hidden || (doc.getElementById('privateView') || {}).hidden) return false;
     const results = snapshot(env), container = doc.getElementById('diagnosticsResults');
     if (!container) return false;
     container.replaceChildren();
