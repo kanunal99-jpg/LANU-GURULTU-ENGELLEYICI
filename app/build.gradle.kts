@@ -14,11 +14,14 @@ android {
     namespace = "com.lanu.sesli"
     compileSdk = 35
     buildFeatures { buildConfig = true }
-    // This is a public certificate digest, never the private signing key.
+    // Fresh-install signing identity approved on 2026-10-27. Public digest
+    // only: the private keystore MUST remain in GitHub Secrets/offline backup.
+    // Refuse accidental signer rotation even when a GitHub variable changes.
+    val canonicalReleaseCert = "39b2beadf8f3ba3936f58d0617c862932737fff45360baff5cadeb8d0f30d278"
     val pinnedReleaseCert = providers.environmentVariable("LANU_RELEASE_CERT_SHA256").orNull.orEmpty()
         .lowercase().replace(":", "").trim()
-    require(pinnedReleaseCert.isEmpty() || pinnedReleaseCert.matches(Regex("[0-9a-f]{64}"))) {
-        "Invalid OTA certificate fingerprint"
+    require(pinnedReleaseCert.isEmpty() || pinnedReleaseCert == canonicalReleaseCert) {
+        "Invalid or unexpected OTA release signing certificate. Original production key rotation is forbidden."
     }
     signingConfigs {
         val storePath = providers.environmentVariable("LANU_SIGNING_STORE_FILE").orNull
