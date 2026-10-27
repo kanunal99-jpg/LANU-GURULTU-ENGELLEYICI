@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {webcrypto}=require('node:crypto');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {Broker}=require('../server/identity-broker.cjs');
-const {BrokerSqliteStore}=require('../server/broker-sqlite-store.cjs');
+const {BrokerSqliteStore,assertDatabaseHealthy}=require('../server/broker-sqlite-store.cjs');
 const Auth=require('../app/src/main/assets/auth-protocol.js');
 const pub=async identity=>Buffer.from(await webcrypto.subtle.exportKey('raw',identity.publicKey)).toString('hex');
 async function enrollment(broker,identity){
@@ -110,5 +110,29 @@ test('duplicate persistent public identities fail closed, SQLite data is restric
   assert.equal(rows.devices[0].keyhex,await pub(identity));
   assert.equal(Object.hasOwn(rows.devices[0],'privateKey'),false);
   assert.throws(()=>store.insertDevice(identity.deviceId,rows.devices[0].keyhex),/UNIQUE|constraint/i);
+ }finally{if(store)store.close();temp.close();}
+});
+
+test('SQLite integrity gate accepts only the single exact quick_check ok result',()=>{
+ const check=rows=>assertDatabaseHealthy({
+  prepare(sql){
+   assert.equal(sql,'PRAGMA quick_check');
+   return {all:()=>rows};
+  }
+ });
+ assert.doesNotThrow(()=>check([{quick_check:'ok'}]));
+ for(const bad of [[],[{quick_check:'database disk image is malformed'}],
+   [{quick_check:'ok'},{quick_check:'invalid btree page'}],
+   [{quick_check:null}],[{}],[{quick_check:'OK'}],null]){
+  assert.throws(()=>check(bad),/SQLite integrity check failed/,
+    'A non-ok, missing or multi-row result must block broker startup');
+ }
+});
+
+test('real SQLite database passes the checked PRAGMA during safe opening',()=>{
+ const temp=disk();let store;
+ try{
+  store=new BrokerSqliteStore(temp.name);
+  assert.doesNotThrow(()=>assertDatabaseHealthy(store.db));
  }finally{if(store)store.close();temp.close();}
 });
