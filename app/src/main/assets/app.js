@@ -156,7 +156,10 @@
     call = null; stream = null; state = 'idle'; muted = false;
     if (notify && oldCall) control(oldCall, 'hangup');
     if (oldCall) { try { oldCall.close(); } catch (_) { log('Call close failed'); } }
-    if (oldStream) oldStream.getTracks().forEach(track => track.stop());
+    if (oldStream) oldStream.getTracks().forEach(track => {
+      try { track.enabled = false; track.stop(); }
+      catch (_) { log('Media track could not stop; restart the app to release capture'); }
+    });
     // A WebView media element can throw during teardown after its backing
     // playback component is disposed. Always finish releasing the call UI.
     try { $('remote').pause(); } catch (_) { log('Remote media pause failed during cleanup'); }
@@ -524,7 +527,7 @@
     const activeVideo = typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
     for (const track of activeVideo) {
       try { track.enabled = false; track.stop(); }
-      catch (_) { log('Camera teardown failed; ending the call to protect privacy'); endCall('Kamera güvenle kapatılamadı. Görüşme sonlandırıldı.'); return; }
+      catch (_) { log('Camera teardown failed; ending the call to protect privacy'); endCall('Kamera kapatılamadı. Gizliliğin için uygulamayı kapatıp yeniden aç.'); return; }
     }
     $('localVideo').srcObject = null;
     $('stopVideo').hidden = true;
