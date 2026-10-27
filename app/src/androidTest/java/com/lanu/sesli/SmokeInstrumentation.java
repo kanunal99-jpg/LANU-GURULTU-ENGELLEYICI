@@ -126,6 +126,26 @@ public class SmokeInstrumentation extends Instrumentation {
         }
     }
     /**
+     * Android package-upgrade persistence is independent of a real touchhold.
+     * The separate normal smoke test exercises the real touch input. Here a
+     * WebView keyboard hold triggers exactly the shipped three-second gate
+     * handler even when a headless Android emulator has no focused window.
+     */
+    private void openOtaPinGate(WebView web) throws Exception {
+        require(web, "!document.hidden && document.getElementById('cameraView').hidden === false",
+                "OTA vault acceptance requires visible app document");
+        js(web, "document.getElementById('lensEmblem').dispatchEvent("
+                + "new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))");
+        try {
+            awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
+                    "Three-second PIN gate opens in emulator");
+        } finally {
+            js(web, "document.getElementById('lensEmblem').dispatchEvent("
+                    + "new KeyboardEvent('keyup',{key:'Enter',bubbles:true,cancelable:true}))");
+        }
+    }
+
+    /**
      * Runs on a disposable CI emulator only. The "seed" process is installed
      * from an older debug-signed APK, "verify" from a newer APK signed by the
      * SAME keystore. Both are real Android package installs, not mock code.
@@ -155,7 +175,7 @@ public class SmokeInstrumentation extends Instrumentation {
                 if (!target.getSharedPreferences("lanu-ota-ci-upgrade", 0).edit()
                         .putString("marker", marker).commit())
                     throw new AssertionError("Native persistence marker not committed");
-                hold(web, "lensEmblem", 3300, false);
+                openOtaPinGate(web);
                 awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
                         "PIN gate opens on the old version");
                 js(web, "document.getElementById('pin').value='741963';"
@@ -183,7 +203,7 @@ public class SmokeInstrumentation extends Instrumentation {
                         + " && !!localStorage.getItem('lens-vault-v1')"
                         + " && !localStorage.getItem('lens-vault-v1').includes('LANU-OTA-CI-ENCRYPTED-DRAFT-20261027')",
                         "Encrypted WebView vault must survive and remain PIN-locked");
-                hold(web, "lensEmblem", 3300, false);
+                openOtaPinGate(web);
                 awaitTrue(web, "!document.getElementById('gate').hidden", 6000,
                         "PIN gate opens after upgrading APK");
                 require(web, "document.getElementById('pinConfirm').hidden",
