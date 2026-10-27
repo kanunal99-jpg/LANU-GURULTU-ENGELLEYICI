@@ -37,8 +37,17 @@ adb install -r "$work/old.apk"
 adb install -r "$work/test.apk"
 check_device_version "$old_code"
 instrument seed
-# Absolutely no adb uninstall, pm clear, app backup, or force-stop of user
-# state between these installs.
+# WebView localStorage is disk backed but its flush may be asynchronous. Test
+# the ciphertext in a genuinely fresh OLD-app process *before* upgrading:
+# this distinguishes a baseline storage durability failure from a migration
+# failure and does not falsely describe either as a successful OTA.
+sleep 3
+adb shell am force-stop com.lanu.sesli
+instrument cold
+sleep 3
+adb shell am force-stop com.lanu.sesli
+# No adb uninstall, pm clear, or destructive app-data operation is permitted.
+# Android's package manager replaces the APK while preserving application data.
 adb install -r "$work/new.apk"
 check_device_version "$new_code"
 instrument verify
