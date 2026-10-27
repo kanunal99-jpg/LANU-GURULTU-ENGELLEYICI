@@ -45,7 +45,7 @@
       <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
       <input type="text" id="partner" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
       <label class="row video-opt" for="videoEnabled"><span>Görüntülü görüşme (isteğe bağlı)</span><input type="checkbox" id="videoEnabled"></label>
-      <p class="hint">Kamera yalnızca bu seçeneği açtığında ve Android izin verdiğinde görüşmede kullanılır. Her görüşme sesli başlar.</p>
+      <p class="hint">Kamera yalnızca bu seçeneği açtığında ve Android izin verdiğinde görüşmede kullanılır. Görüntülü arama yalnızca bu seçenekle etkinleşir.</p>
       <button id="callBtn" disabled>Sesli ara</button>
       <div id="videoPanel" class="video-panel" hidden aria-label="Görüntülü görüşme">
         <video id="remoteVideo" autoplay playsinline muted aria-label="Karşı tarafın görüntüsü"></video>
@@ -79,6 +79,17 @@
       <label class="label" for="contactName">Kişiye vereceğin ad</label><input id="contactName" type="text" maxlength="40" autocomplete="off" placeholder="İsteğe bağlı ad">
       <button id="pairBtn">Eşleştirme isteği gönder</button><p id="pairStatus" class="hint" role="status"></p>
       <div id="pairRequest" hidden><p id="pairFrom"></p><label class="row"><span>Rehbere kaydet</span><input type="checkbox" id="saveIncoming"></label><button id="pairAccept" class="green">Onayla</button><button id="pairReject" class="secondary">Reddet</button></div>
+    </section>
+    <section class="card" id="privateDrafts">
+      <h2>PIN korumalı mesaj taslakları</h2>
+      <p class="hint">Taslaklar yalnız bu cihazda PIN kasasının içinde şifreli tutulur. Henüz karşı tarafa gönderilmez; güvenilir kimlik doğrulama olmadan mesaj aktarımı açılmaz.</p>
+      <label for="draftPeer" class="label">Alıcının görüşme kodu</label>
+      <input id="draftPeer" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 haneli kod">
+      <label for="draftText" class="label">Mesaj taslağı</label>
+      <textarea id="draftText" maxlength="1000" rows="3" autocomplete="off" placeholder="Şifreli, yalnız bu cihazda saklanır"></textarea>
+      <button id="saveDraft" type="button" class="secondary">Şifreli taslak kaydet</button>
+      <p id="draftStatus" class="hint" role="status" aria-live="polite"></p>
+      <div id="draftList" class="draft-list" aria-label="Şifreli mesaj taslakları"></div>
     </section>
     <section class="card"><label class="row"><span>Uygulama içi rehber</span><input type="checkbox" id="contactsEnabled"></label><p class="hint">İsteğe bağlıdır. Telefon rehberine erişilmez. Rehber kapalıyken kodla arayabilirsin.</p><div id="contactList"></div></section>
     <section class="card"><label class="row"><span>Kamera ekranındayken çağrı al</span><input type="checkbox" id="incomingEnabled" checked></label><p class="hint">Kamera ekranında zil ve isteğe bağlı Android bildirimi görünür; cevaplamak için PIN gerekir. Uygulama arka planda veya kapalıyken henüz çağrı alınamaz.</p><button id="notificationPermission" class="secondary">Çağrı bildirimi izni ver</button><p class="hint">Android 13 ve sonrasında sistem bildirim iznini onaylaman gerekir. Bildirimlerde kişi adı ve görüşme kodu gösterilmez.</p></section>
