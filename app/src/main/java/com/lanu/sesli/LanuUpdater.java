@@ -270,13 +270,16 @@ final class LanuUpdater {
                 tmp.delete();
             }
             final String failure=error;
-            final boolean canceled=cancelRequested;
             main.post(()->{
                 if(destroyed)return;
+                // Re-evaluate cancellation ON the UI thread. A user can cancel
+                // after the worker has finished but before this callback runs.
+                final boolean canceled=cancelRequested;
                 busy=false;downloading=false;
                 if(failure!=null || canceled) {
+                    if(canceled && dest.isFile()) dest.delete();
                     verified=null;
-                    emit(canceled?"cancelled":"error",canceled?"İndirme iptal edildi; eksik APK silindi.":failure);
+                    emit(canceled?"cancelled":"error",canceled?"İndirme iptal edildi; APK önbellekten silindi.":failure);
                 }
                 else {
                     verified=dest;
