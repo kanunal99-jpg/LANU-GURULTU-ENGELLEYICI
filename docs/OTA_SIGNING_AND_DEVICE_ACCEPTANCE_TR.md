@@ -1,5 +1,7 @@
 # LANU Lens — OTA imza sürekliliği ve gerçek cihaz kabul rehberi
 
+> **27.10.2026 GÜNCEL KARAR:** Kullanıcı eski debug APK'yi kaldırıp yeni **sabit üretim sertifikasıyla** temiz kurulum yapmayı seçti. Önceki debug APK'nin orijinal keystore'unun bulunması artık **bu tek seferlik temiz kurulum için zorunlu değil**. Fakat silme tüm eski yerel kullanıcı verilerini kaybettirebilir. Yeni sürüm doğrulanmadan eskisini kaldırma. Uygulanacak yeni süreç: [OTA_FRESH_INSTALL_BOOTSTRAP_TR.md](OTA_FRESH_INSTALL_BOOTSTRAP_TR.md). Aşağıdaki eski-imza uyarıları yalnız önceki APK'yi **silmeden yerinde güncelleme** senaryosu için geçerlidir.
+
 > Kapsam yalnız LANU Lens OTA'dır. LANU Hesap Makinesi **salt okunur referans** olarak incelenmiştir. Bu doküman üretim kabul kanıtı değildir.
 
 ## 27.10.2026 doğrulanan başlangıç
@@ -10,9 +12,9 @@
 - `LANU-LENS-OTA/main/latest.json` henüz yayın yok anlamındaki `versionCode=0` boş manifestini taşıyor.
 - Önceki build208/212/214/230/234 test APK'ları birbiriyle eşleşmeyen sertifikalar kullanmıştır. **Cihazdaki kurulumun** orijinal özel keystore'u doğrulanmadan bunlardan herhangi birinin üzerine veri koruyan OTA garanti edilemez.
 
-## Kalıcı üretim anahtarı — kayıpsız geçiş koşulu
+## Önceki imzalı debug APK'yi silmeden geçiş — tarihsel koşul
 
-**Yeni keystore, mevcut farklı sertifikalı LANU Lens kurulumunu üzerine güncelleyemez.** Önce kurulu APK'nin SHA-256 sertifikasını ve mevcut eski özel keystore'un yedeğini güvenli çevrimdışı ortamda incele. Keystore yoksa yeni anahtarı eskisi gibi gösterme; kullanıcı verilerini riske atacak kaldır/yeniden kur yöntemini uygulama.
+**Yeni keystore, mevcut farklı sertifikalı LANU Lens kurulumunu üzerine güncelleyemez. Ancak kullanıcı artık eski kurulumu kaldırıp yeni imzalı APK'yi ilk defa temiz kurmayı kabul etti.** Önce kurulu APK'nin SHA-256 sertifikasını ve mevcut eski özel keystore'un yedeğini güvenli çevrimdışı ortamda incele. Keystore yoksa yeni anahtarı eskisi gibi gösterme; kullanıcı verilerini riske atacak kaldır/yeniden kur yöntemini uygulama.
 
 GitHub **Settings → Secrets and variables → Actions** altında aşağıdakileri yapılandır (değerleri depoya/PR'a/CI loguna yazma):
 
@@ -23,7 +25,7 @@ GitHub **Settings → Secrets and variables → Actions** altında aşağıdakil
 | Secret | `LANU_RELEASE_KEY_ALIAS` | İlgili imzalama alias'ı |
 | Secret | `LANU_RELEASE_KEY_PASSWORD` | Özel anahtar parolası |
 | Secret | `LANU_OTA_PUBLISH_TOKEN` | Yalnız `LANU-LENS-OTA` için Contents + Releases write yetkisine sahip ince kapsamlı token |
-| Variable | `LANU_RELEASE_CERT_SHA256` | Orijinal keystore sertifikasının herkese açık 64 karakter hex SHA-256 izi |
+| Variable | `LANU_RELEASE_CERT_SHA256` | Yeni sabit sertifikanın herkese açık SHA-256 izi: `39b2beadf8f3ba3936f58d0617c862932737fff45360baff5cadeb8d0f30d278` (yeni kurulum için) |
 | Variable | `LANU_OTA_MANIFEST_URL` | `https://raw.githubusercontent.com/kanunal99-jpg/LANU-LENS-OTA/main/latest.json` |
 | Variable | `LANU_OTA_DEVICE_ACCEPTED_APK_SHA256` | **Yalnız gerçek cihazda bu APK ile güncelleme ve PIN/veri koruması sınandıktan sonra** onay verilen tam APK dosyasının 64 haneli SHA-256 izi |
 
