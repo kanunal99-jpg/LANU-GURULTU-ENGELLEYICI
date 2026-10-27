@@ -22,7 +22,7 @@ jobs:
     env:
       OTA_PROMOTE_TAG: ${{ inputs.release_tag }}
       OTA_ACCEPTED_SHA256: ${{ inputs.accepted_sha256 }}
-      OTA_PROMOTE_DIR: ${{ runner.temp }}/lanu-approved-ota
+      OTA_PROMOTE_DIR: ${{ github.workspace }}/.verified-ota
       LANU_OTA_DEVICE_ACCEPTED_APK_SHA256: ${{ vars.LANU_OTA_DEVICE_ACCEPTED_APK_SHA256 }}
       LANU_RELEASE_CERT_SHA256: ${{ vars.LANU_RELEASE_CERT_SHA256 }}
       LANU_OTA_MANIFEST_URL: ${{ vars.LANU_OTA_MANIFEST_URL }}
