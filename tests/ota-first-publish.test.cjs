@@ -37,7 +37,7 @@ function run(previous,{version=120,tagCode=404,manifestStatus=200}={}) {
    "echo \"package: name='com.lanu.sesli' versionCode='"+version+"' versionName='2.0.10'\""
   ].join('\n')+'\n',{mode:0o755});
   const env={...process.env,GH_TOKEN:'test-token',GITHUB_REPOSITORY_OWNER:'kanunal99-jpg',
-   GITHUB_RUN_NUMBER:String(version),OTA_VERSION:'2.0.10',OTA_APK:apk,
+   OTA_BUILD_NUMBER:String(version),OTA_VERSION:'2.0.10',OTA_APK:apk,
    LANU_RELEASE_CERT_SHA256:'a'.repeat(64),LANU_OTA_MANIFEST_URL:feed,
    PATH:bin+':'+process.env.PATH,MOCK_GH_LOG:calls,
    MOCK_PREVIOUS_B64:encoded,MOCK_MANIFEST_STATUS:String(manifestStatus),
