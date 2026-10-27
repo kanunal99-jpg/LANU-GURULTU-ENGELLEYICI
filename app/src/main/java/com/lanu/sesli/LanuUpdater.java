@@ -78,6 +78,7 @@ final class LanuUpdater {
             if(latest!=null && latest.code>installedCode()) {
                 j.put("availableVersion",latest.version);
                 j.put("availableVersionCode",latest.code);
+                j.put("availableSizeBytes",latest.size);
             }
             if("downloading".equals(state) || "cancelling".equals(state))
                 j.put("progressPercent",downloadProgress);
