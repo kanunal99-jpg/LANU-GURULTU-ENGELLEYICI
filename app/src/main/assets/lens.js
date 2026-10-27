@@ -51,6 +51,12 @@
     $('availableVersion').textContent = hasNew
       ? event.availableVersion + ' (kod ' + (event.availableVersionCode || '?') + ')'
       : event.state === 'current' ? 'Güncel' : event.configured === false ? 'Yayın bekleniyor' : 'Yeni sürüm yok';
+    const fileBytes = event.availableSizeBytes;
+    const validSize = hasNew && Number.isSafeInteger(fileBytes) && fileBytes >= 1024 && fileBytes <= 160 * 1024 * 1024;
+    $('updateFileSize').hidden = !validSize;
+    $('updateFileSize').textContent = validSize
+      ? 'Güncelleme APK boyutu: ' + (Math.round(fileBytes / 1048576 * 10) / 10).toFixed(1) + ' MB'
+      : '';
     $('updateStatus').textContent = String(event.message || 'Güncelleme bilgisi alınamadı.');
     const downloading = event.state === 'downloading' || event.state === 'cancelling';
     $('updateProgressBox').hidden = !downloading;
@@ -184,6 +190,8 @@
     $('callsTab').setAttribute('aria-selected','true');$('updatesTab').setAttribute('aria-selected','false');$('diagnosticsTab').setAttribute('aria-selected','false');
     $('downloadUpdate').hidden=$('installUpdate').hidden=$('updateProgressBox').hidden=true;
     $('availableVersion').textContent='Henüz denetlenmedi';
+    $('updateFileSize').hidden=true;
+    $('updateFileSize').textContent='';
     $('updateStatus').textContent='Güvenli sürüm bilgileri kontrol edilecek.';
     $('pinForm').reset();
     for(const id of ['restorePin','restorePassphrase','exportPin','exportPassphrase','exportPassphraseConfirm'])$(id).value='';
