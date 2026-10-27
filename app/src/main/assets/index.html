@@ -44,7 +44,14 @@
     <section class="card">
       <label for="partner" class="label">Karşı tarafın 6 haneli kodu</label>
       <input type="text" id="partner" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="123456">
-      <button id="callBtn" disabled>Ara</button>
+      <label class="row video-opt" for="videoEnabled"><span>Görüntülü görüşme (isteğe bağlı)</span><input type="checkbox" id="videoEnabled"></label>
+      <p class="hint">Kamera yalnızca bu seçeneği açtığında ve Android izin verdiğinde görüşmede kullanılır. Her görüşme sesli başlar.</p>
+      <button id="callBtn" disabled>Sesli ara</button>
+      <div id="videoPanel" class="video-panel" hidden aria-label="Görüntülü görüşme">
+        <video id="remoteVideo" autoplay playsinline muted aria-label="Karşı tarafın görüntüsü"></video>
+        <video id="localVideo" autoplay playsinline muted aria-label="Kendi kamera önizlemen"></video>
+        <p id="videoStatus" class="hint" role="status" aria-live="polite"></p>
+      </div>
       <button id="answerBtn" class="green" hidden>Gelen aramayı cevapla</button>
       <button id="hangBtn" class="red" hidden>Kapat / reddet</button>
       <button id="muteBtn" class="secondary" aria-pressed="false" hidden>Mikrofonu kapat</button>
@@ -52,6 +59,12 @@
     </section>
     <section class="card">
       <h2>Ses ayarları</h2>
+      <label for="noisePreset" class="label">Mikrofon profili</label>
+      <select id="noisePreset" aria-label="Mikrofon gürültü profili">
+        <option value="balanced">Dengeli</option>
+        <option value="noisy">Gürültülü ortam</option>
+        <option value="natural">Doğal ses</option>
+      </select>
       <label class="row" for="ns"><span>Gürültü azaltma</span><input type="checkbox" id="ns" checked></label>
       <label class="row" for="ec"><span>Yankı önleme</span><input type="checkbox" id="ec" checked></label>
       <label class="row" for="agc"><span>Ses seviyesi dengeleme</span><input type="checkbox" id="agc" checked></label>
