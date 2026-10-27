@@ -28,7 +28,10 @@
     if (!pane || pane.hidden || (doc.getElementById('privateView') || {}).hidden) return false;
     const results = snapshot(env), container = doc.getElementById('diagnosticsResults');
     if (!container) return false;
-    container.replaceChildren();
+    // Android 10 stock WebView (Chromium 74) predates replaceChildren().
+    // Keep this PIN-private diagnostics/OTA tab usable on older devices.
+    if (typeof container.replaceChildren === 'function') container.replaceChildren();
+    else while (container.firstChild) container.removeChild(container.firstChild);
     for (const [key, labels] of Object.entries(STATUSES)) {
       const line = doc.createElement('li');
       line.className = 'diagnostic-row';
