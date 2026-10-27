@@ -68,17 +68,17 @@ test('tampered backup fields, ciphertext, oversized input and malicious routing 
 });
 test('storage quota error cannot leave restored route behind when vault write fails',async()=>{
  const source=await prepared(),bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
- const dest=storage();dest.setItem('lanuId','111111');
+ const dest=storage();dest.setItem('lanuId','987654');
  const originalSet=dest.setItem.bind(dest);
  dest.setItem=(key,value)=>{if(key==='lens-vault-v1')throw Error('QuotaExceeded');originalSet(key,value);};
  await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle}),/QuotaExceeded/);
  assert.equal(dest.getItem('lens-vault-v1'),null);
- assert.equal(dest.getItem('lanuId'),'111111');
+ assert.equal(dest.getItem('lanuId'),'987654');
 });
 
 test('background/PIN-gate cancellation after slow KDF prevents writing any restored data',async()=>{
  const source=await prepared(),bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
- const target=storage();target.setItem('lanuId','123456');
+ const target=storage();target.setItem('lanuId','987654');
  let checks=0;
  await assert.rejects(()=>transfer.importBackup({
    storage:target,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle,
@@ -86,7 +86,7 @@ test('background/PIN-gate cancellation after slow KDF prevents writing any resto
  }),/Cancelled/);
  assert.equal(checks,1);
  assert.equal(target.getItem('lens-vault-v1'),null);
- assert.equal(target.getItem('lanuId'),'123456');
+ assert.equal(target.getItem('lanuId'),'987654');
 });
 test('Android SAF backup bridge is PIN-gated, limited and uses system document picker',()=>{
  const fs=require('node:fs');
@@ -143,4 +143,59 @@ test('SAF export verifies full ciphertext by reopening the picked document befor
  assert.ok(section.includes('java.util.Arrays.fill(bytes,(byte)0)'));
  assert.ok(section.includes('backupResult("save",verified)'));
  assert.equal(section.includes('out.flush();ok=true;'),false,'No unverified write-only success');
+});
+
+
+test('restore cannot overwrite a preexisting, different six-digit routing identity',async()=>{
+ const source=await prepared();
+ const bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const dest=storage();dest.setItem('lanuId','123456');
+ await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,
+    pin:'741963',passphrase,serialized:bundle}),/Routing identity conflict/);
+ assert.equal(dest.getItem('lanuId'),'123456');
+ assert.equal(dest.getItem('lens-vault-v1'),null);
+});
+
+
+test('new installation provisional routing code can be safely replaced by encrypted backup',async()=>{
+ const source=await prepared();
+ const bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const dest=storage();
+ dest.setItem('lanuId','123456');
+ dest.setItem('lens-routing-provisional-v1','123456');
+ const result=await transfer.importBackup({storage:dest,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle});
+ assert.equal(result.routingIdRestored,true);
+ assert.equal(dest.getItem('lanuId'),'987654');
+ assert.equal(dest.getItem('lens-routing-provisional-v1'),null);
+ const vault=new LensVault(dest,webcrypto);
+ await vault.unlock('741963');
+ assert.equal(vault.data.contacts[0].name,'Sensitive Contact');
+});
+test('stale or mismatched provisional marker cannot authorize routing code replacement',async()=>{
+ const source=await prepared();
+ const bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const dest=storage();dest.setItem('lanuId','123456');
+ dest.setItem('lens-routing-provisional-v1','222222');
+ await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle}),/Routing identity conflict/);
+ assert.equal(dest.getItem('lens-vault-v1'),null);
+ assert.equal(dest.getItem('lanuId'),'123456');
+});
+test('failed provisional restore rolls routing code back before any vault commit',async()=>{
+ const source=await prepared();
+ const bundle=await transfer.exportBackup({storage:source,crypto:webcrypto,pin:'741963',passphrase});
+ const dest=storage();
+ dest.setItem('lanuId','123456');
+ dest.setItem('lens-routing-provisional-v1','123456');
+ const original=dest.setItem.bind(dest);
+ dest.setItem=(key,value)=>{if(key==='lens-vault-v1')throw Error('Storage quota');return original(key,value);};
+ await assert.rejects(()=>transfer.importBackup({storage:dest,crypto:webcrypto,pin:'741963',passphrase,serialized:bundle}),/Storage quota/);
+ assert.equal(dest.getItem('lens-vault-v1'),null);
+ assert.equal(dest.getItem('lanuId'),'123456');
+ assert.equal(dest.getItem('lens-routing-provisional-v1'),'123456');
+});
+test('auto-generated routing marker is only created during first-run, not manual rotation',()=>{
+ const fs=require('node:fs');
+ const app=fs.readFileSync('app/src/main/assets/app.js','utf8');
+ assert.ok(app.includes("if (safeSet('lanuId', myId)) safeSet(PROVISIONAL_ROUTING, myId)"));
+ assert.ok(app.includes('localStorage.removeItem(PROVISIONAL_ROUTING)'));
 });

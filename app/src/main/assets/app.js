@@ -2,6 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const PREFIX = 'lanu-sesli-';
+  const PROVISIONAL_ROUTING = 'lens-routing-provisional-v1';
   const DEADLINE = 45000;
   let peer = null, call = null, stream = null, state = 'idle', ready = false;
   let epoch = 0, timeout = null, retry = null, connectTimeout = null, transportTimeout = null, attempts = 0;
@@ -441,6 +442,8 @@
       // Explicit user action only: persist before retiring the old ID.
       // A storage failure must not silently change the displayed identity.
       if (!safeSet('lanuId', next)) { say('Kod kaydedilemedi. Telefon depolamasını kontrol et.'); return false; }
+      // A manually selected ID is now owned, never replace it during restore.
+      try { localStorage.removeItem(PROVISIONAL_ROUTING); } catch (_) {}
       myId = next;
       $('myid').textContent = next;
       pairs.forEach(session => session.close());
@@ -516,7 +519,12 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) window.lanuPause('Uygulama arka plana alındı; görüşme kapatıldı.'); else window.lanuResume(); });
   const storedId = safeGet('lanuId');
   myId = /^[1-9]\d{5}$/.test(storedId || '') ? storedId : newId();
-  if (myId && !/^[1-9][0-9]{5}$/.test(storedId || '')) safeSet('lanuId', myId);
+  if (myId && !/^[1-9][0-9]{5}$/.test(storedId || '')) {
+    // Only a first-run automatically allocated code may be replaced by a
+    // confirmed encrypted backup. Existing persisted codes are never assumed
+    // to be disposable, even on an empty vault.
+    if (safeSet('lanuId', myId)) safeSet(PROVISIONAL_ROUTING, myId);
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     say('Mikrofon desteği yok. Android System WebView bileşenini güncelleyin.'); ui();
   } else if (available()) start(myId);
